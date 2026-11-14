@@ -62,6 +62,14 @@
     - 비-WS 요청은 필터가 막지 않음(404)
 - 발견하고 수정한 문제: Spring Cloud LoadBalancer가 첫 요청 때 event loop에서 child context를 만들면서 블로킹했다. eager-load로 해결했다(decisions D10).
 
+### 실제 프로세스 E2E (2026-11-15)
+- bootJar 4개를 실행했다: auth-api :8080, backend `relay` :8081, gateway :8082, backend `direct` :8083
+- `java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083` → **ALL OK**
+  - relay 경로(gateway)와 direct 경로 각각 확인: echo(id, userId, srvTs), 티켓 재사용 401, 미인증 401, push 구독
+- 앱 로그 4개에서 원문 티켓(`ticket=eyJ`) 0건
+- direct backend에 세션 1개를 연결한 상태로 SIGTERM을 보냈다. 클라이언트는 **18초 후 1001**을 받았다(window 20초). 이어서 `Drain finished, 0 sessions still open` → `Graceful shutdown complete`
+- backend가 auth-api보다 먼저 뜨면 초기 JWKS 조회는 실패한다. 첫 핸드셰이크에서 미등록 kid를 보고 재조회해 정상 복구된다. 경고 로그에 예외 타입이 나오도록 개선했다.
+
 ## 후속 과제
 - gateway drain 시 relay 세션별로 1001과 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
 - 500 에러 로그에 요청 URI의 `ticket`이 그대로 남는 문제 해결. 에러 핸들러 커스터마이즈가 필요하다(decisions D11).

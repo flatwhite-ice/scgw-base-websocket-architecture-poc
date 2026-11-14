@@ -72,7 +72,8 @@ class JwksKeySource(
                 current.set(JWKSet.parse(response.body()))
                 true
             } catch (e: Exception) {
-                log.log(Level.WARNING, "JWKS refresh from $uri failed: ${e.message}")
+                // e.g. ConnectException with a null message when auth-api is not up yet; keep the cached keys.
+                log.log(Level.WARNING, "JWKS refresh from $uri failed: ${e.javaClass.simpleName}: ${e.message}")
                 false
             }
         }
