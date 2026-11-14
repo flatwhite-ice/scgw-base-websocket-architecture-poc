@@ -22,10 +22,10 @@ class StartupConfigTest {
         @Autowired val verifier: ObjectProvider<JwtVerifier>,
     ) {
         @Test
-        fun `starts in self mode with JWKS from local auth-api`() {
-            assertEquals(WsProperties.AuthMode.SELF, props.auth.mode)
-            assertNotNull(keySource.ifAvailable as? JwksKeySourceLifecycle)
-            assertNotNull(verifier.ifAvailable)
+        fun `defaults to relay (gateway mode) without a JWKS refresh loop`() {
+            assertEquals(WsProperties.AuthMode.GATEWAY, props.auth.mode)
+            assertNull(keySource.ifAvailable)
+            assertNull(verifier.ifAvailable)
         }
     }
 

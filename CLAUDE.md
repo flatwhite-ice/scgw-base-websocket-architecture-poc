@@ -23,13 +23,13 @@ Stack: JDK 25 (Temurin, installed at `~/Library/Java/JavaVirtualMachines/temurin
 
 # Run locally (relay + direct side by side)
 ./gradlew :modules:auth-api:bootRun                                              # :8080
-./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=relay'    # :8081, trusts gateway headers
+./gradlew :modules:ws-backend:bootRun                                            # :8081, default = relay (trusts gateway headers)
 ./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'   # :8083, verifies JWT itself
 ./gradlew :modules:ws-gateway:bootRun                                            # :8082 -> lb:ws://ws-backend (localhost:8081)
 java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083   # JDK-only E2E smoke
 ```
 
-Without a profile, ws-backend starts in self (direct) mode on :8081 with JWKS from the local auth-api. The JWKS bean only exists in self mode with a non-blank URI, so `relay` runs no refresh loop.
+ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway's default target. In that mode it trusts the injected headers, so it must only be reachable through the gateway. The `direct` profile switches to self mode on :8083 with JWKS. The JWKS bean only exists in self mode with a non-blank URI.
 
 ## Architecture
 

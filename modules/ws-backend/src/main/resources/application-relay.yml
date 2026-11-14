@@ -1,4 +1,4 @@
-# Relay (architecture A): only reachable through ws-gateway, which authenticates and injects X-User-Id etc.
+# Relay (architecture A) — same as the default config; kept so the mode can be stated explicitly.
 server:
   port: 8081
 ws:

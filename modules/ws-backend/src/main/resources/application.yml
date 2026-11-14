@@ -8,12 +8,13 @@ server:
   port: 8081
   shutdown: graceful
 
-# Defaults = direct (self-authenticating) mode against a local auth-api, so the app starts without a profile.
-# Profiles: `relay` (behind ws-gateway, trusts its headers, :8081) / `direct` (self mode on :8083, next to relay).
+# Default = relay (architecture A): behind ws-gateway (whose default target is localhost:8081), trusting the
+# X-User-Id / X-Scopes / X-Auth-Exp headers it injects. No JWKS needed.
+# Must only be reachable through the gateway (K8s: NetworkPolicy) — anyone hitting it directly could spoof identity.
+# Profile `direct` = architecture B (self-authenticating, :8083), can run next to this instance.
 ws:
   auth:
-    mode: self
-    jwks-uri: http://localhost:8080/.well-known/jwks.json
+    mode: gateway
   heartbeat:
     interval: 30s
     max-missed: 2

@@ -24,8 +24,8 @@ data class WsProperties(
     }
 
     data class Auth(
-        val mode: AuthMode = AuthMode.SELF,
-        /** JWKS of auth-api. Required in SELF mode unless another KeySource bean is provided. */
+        val mode: AuthMode = AuthMode.GATEWAY,
+        /** JWKS of auth-api. Required in SELF mode (set by the `direct` profile) unless another KeySource bean exists. */
         val jwksUri: URI? = null,
         val jwksRefreshInterval: Duration = Duration.ofMinutes(5),
     )

@@ -69,7 +69,7 @@ class WsConfig {
     @Bean
     // Only self mode verifies JWTs. A blank URI (tests override with "") disables JWKS;
     // @ConditionalOnProperty would still match "".
-    @ConditionalOnExpression("'\${ws.auth.mode:self}'.equalsIgnoreCase('self') and !'\${ws.auth.jwks-uri:}'.isBlank()")
+    @ConditionalOnExpression("'\${ws.auth.mode:gateway}'.equalsIgnoreCase('self') and !'\${ws.auth.jwks-uri:}'.isBlank()")
     fun jwksKeySource(props: WsProperties): JwksKeySourceLifecycle = JwksKeySourceLifecycle(props)
 
     /** Only needed (and only created) when a KeySource exists, i.e. in self mode. Null bean otherwise. */

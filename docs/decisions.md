@@ -79,11 +79,14 @@
   - 신규 핸드셰이크는 503으로 거절하고, 기존 세션은 window 안의 랜덤 지터 시점에 1001로 닫는다.
   - `spring.lifecycle.timeout-per-shutdown-phase`(35초)는 drain window(20초)보다 크게 잡았다.
 - **실행 프로필**
-  - 기본값(프로필 없음): self 모드, 8081, JWKS=`http://localhost:8080/.well-known/jwks.json`
-  - `relay`: gateway 모드, 8081
-  - `direct`: self 모드, 8083. relay 인스턴스와 같은 머신에서 함께 띄우기 위한 프로필이다.
+  - 기본값(프로필 없음) = **relay**: gateway 모드, 8081. 게이트웨이의 기본 라우팅 대상(`localhost:8081`)과 맞물리고 JWKS가 필요 없다. `relay` 프로필은 명시용이며 기본값과 같다.
+  - `direct`: self 모드, 8083, JWKS=`http://localhost:8080/.well-known/jwks.json`. relay 인스턴스와 같은 머신에서 함께 띄울 수 있다.
   - JWKS 빈은 `self` 모드이고 URI가 비어 있지 않을 때만 만든다. relay에서는 JWKS 갱신 루프가 돌지 않는다.
-  - 처음에는 JWKS URI를 `direct` 프로필에만 넣었다. 그래서 프로필 없이 기동하면 `ws.auth.mode=self requires ws.auth.jwks-uri`로 실패했다. 지금은 `StartupConfigTest`가 프로필 없음, direct, relay 세 가지 기동을 회귀 검증한다.
+  - **변경 이력**
+    1. 처음에는 JWKS URI를 `direct` 프로필에만 넣었다. 그래서 프로필 없이 기동하면 self 모드에 키가 없어 실패했다.
+    2. 이를 고치려고 기본값을 self로 바꿨다. 그러자 기본 포트 8081이 게이트웨이 대상인데 모드가 맞지 않게 됐다. 게이트웨이가 `ticket`과 `Authorization`을 제거해 forward하므로, self 모드 backend는 401을 낸다.
+    3. 최종적으로 기본값을 relay로 정했다. `StartupConfigTest`가 프로필 없음, direct, relay 세 가지 기동을 회귀 검증한다.
+  - **보안 전제:** gateway 모드 backend는 `X-User-Id` 등을 그대로 신뢰한다. 게이트웨이를 우회해 직접 접근할 수 있으면 신원 위조가 가능하다. 로컬 PoC에서는 허용한다. K8s(M5)에서는 NetworkPolicy로 backend ingress를 ws-gateway 파드로만 제한해야 한다.
 
 ## D9. close 프레임 유실 (1006) 원인과 수정 (M2)
 

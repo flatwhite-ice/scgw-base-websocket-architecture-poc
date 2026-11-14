@@ -73,5 +73,6 @@
 ## 후속 과제
 - gateway drain 시 relay 세션별로 1001과 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
 - 500 에러 로그에 요청 URI의 `ticket`이 그대로 남는 문제 해결. 에러 핸들러 커스터마이즈가 필요하다(decisions D11).
+- M5: relay backend의 ingress를 ws-gateway로만 제한하는 NetworkPolicy. gateway 모드는 헤더를 신뢰하기 때문이다(decisions D8).
 - K8s 파드 IP 디스커버리(Spring Cloud Kubernetes 또는 headless Service)는 M5에서 붙인다.
 - M4 메트릭(`ws.sessions.active` 등) 연결. `SessionRegistry.activeCount`와 `WsSessionHandler.droppedPushMessages`가 이미 준비되어 있다.
