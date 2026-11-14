@@ -1,11 +1,11 @@
 // JDK만으로 하는 수동 E2E 스모크 테스트(websocat/k6 불필요):
 //   java scripts/WsSmoke.java [authBase] [wsBase...]
-//   java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083 ws://localhost:8085
+//   java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093
 // wsBase마다 auth-api에서 토큰과 티켓을 받아, 그 주소가 제공하는 서비스만 확인한다(핸드셰이크가 404면 건너뜀).
 //   - ws-backend(/ws/echo, /ws/push): echo + push, 응답 server가 ws-backend@, 티켓 재사용 -> 401, 자격증명 없음 -> 401
 //   - ws-chat(/ws/chat): 두 연결이 같은 방에 join한 뒤 say가 둘 다에게 도착, 응답 server가 ws-chat@
 //   - 라우트/엔드포인트가 없는 경로(/ws/unknown) -> 404
-// 게이트웨이(8082)는 두 서비스를 모두 제공하므로 경로별 라우팅까지 확인된다.
+// 게이트웨이(8080)는 두 서비스를 모두 제공하므로 경로별 라우팅까지 확인된다.
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,8 +26,8 @@ public class WsSmoke {
     static int failures = 0;
 
     public static void main(String[] args) throws Exception {
-        String auth = args.length > 0 ? args[0] : "http://localhost:8080";
-        String[] targets = args.length > 1 ? java.util.Arrays.copyOfRange(args, 1, args.length) : new String[] {"ws://localhost:8082"};
+        String auth = args.length > 0 ? args[0] : "http://localhost:8070";
+        String[] targets = args.length > 1 ? java.util.Arrays.copyOfRange(args, 1, args.length) : new String[] {"ws://localhost:8080"};
         for (String target : targets) {
             System.out.println("== " + target);
             String token = field(post(auth + "/auth/token", null, "{\"userId\":\"smoke-user\"}"), "token");

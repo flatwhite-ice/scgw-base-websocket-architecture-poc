@@ -5,12 +5,12 @@ spring:
     # ws.drain.window(+ close 유예)보다 커야 drain 단계가 중간에 잘리지 않는다.
     timeout-per-shutdown-phase: 35s
 server:
-  port: 8084
+  port: 8091
   shutdown: graceful
 
 # 기본값 = relay(구조 A): ws-gateway 뒤에서 동작한다(게이트웨이가 /ws/chat/**를 이 서비스로 보낸다).
 # 게이트웨이가 넣어 준 X-User-Id / X-Scopes / X-Auth-Exp 헤더를 신뢰하므로 게이트웨이를 통해서만 접근 가능해야 한다.
-# `direct` 프로필 = 구조 B(자체 인증, :8085). 이 인스턴스와 함께 띄울 수 있다.
+# `direct` 프로필 = 구조 B(자체 인증, :8093). 이 인스턴스와 함께 띄울 수 있다.
 ws:
   auth:
     mode: gateway

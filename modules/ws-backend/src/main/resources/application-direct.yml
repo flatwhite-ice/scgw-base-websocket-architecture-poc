@@ -1,8 +1,8 @@
 # Direct(구조 B): 클라이언트가 여기로 직접 연결하고 backend가 JWT를 직접 검증한다.
-# 포트 8083: 8081의 relay 인스턴스와 함께 띄울 수 있게 한다.
+# 포트 8092: 8090의 relay 인스턴스와 함께 띄울 수 있게 한다.
 server:
-  port: 8083
+  port: 8092
 ws:
   auth:
     mode: self
-    jwks-uri: http://localhost:8080/.well-known/jwks.json
+    jwks-uri: http://localhost:8070/.well-known/jwks.json

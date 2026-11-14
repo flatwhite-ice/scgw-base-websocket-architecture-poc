@@ -24,18 +24,18 @@ Stack: JDK 25 (Temurin, installed at `~/Library/Java/JavaVirtualMachines/temurin
 ./gradlew :modules:ws-backend:test --tests '*SelfModeTest.echo round trip*'      # one test (backtick names)
 
 # Run locally (relay + direct side by side)
-./gradlew :modules:auth-api:bootRun                                              # :8080
-./gradlew :modules:ws-backend:bootRun                                            # :8081, default = relay (trusts gateway headers)
-./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'   # :8083, verifies JWT itself
-./gradlew :modules:ws-chat:bootRun                                               # :8084, default = relay
-./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'      # :8085, verifies JWT itself
-./gradlew :modules:ws-gateway:bootRun                                            # :8082, /ws/echo,/ws/push -> :8081, /ws/chat/** -> :8084
-java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083 ws://localhost:8085   # JDK-only E2E smoke
+./gradlew :modules:auth-api:bootRun                                              # :8070
+./gradlew :modules:ws-backend:bootRun                                            # :8090, default = relay (trusts gateway headers)
+./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'   # :8092, verifies JWT itself
+./gradlew :modules:ws-chat:bootRun                                               # :8091, default = relay
+./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'      # :8093, verifies JWT itself
+./gradlew :modules:ws-gateway:bootRun                                            # :8080, /ws/echo,/ws/push -> :8090, /ws/chat/** -> :8091
+java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093   # JDK-only E2E smoke
 ```
 
 The smoke script checks only the services each address serves; it skips any whose handshake returns 404. For manual websocat/curl commands (tokens, tickets, echo/push, chat, routing, 401 and spoofing checks), see `docs/ws-cli-testing.md`.
 
-Both services default to relay (gateway auth mode): ws-backend on :8081 and ws-chat on :8084, which are the gateway's discovery targets. In that mode a service trusts the injected headers, so it must only be reachable through the gateway. The `direct` profile switches to self mode with JWKS, on :8083 for ws-backend and :8085 for ws-chat. The JWKS bean only exists in self mode with a non-blank URI.
+Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-chat on :8091, which are the gateway's discovery targets. In that mode a service trusts the injected headers, so it must only be reachable through the gateway. The `direct` profile switches to self mode with JWKS, on :8092 for ws-backend and :8093 for ws-chat. The JWKS bean only exists in self mode with a non-blank URI.
 
 ## Architecture
 

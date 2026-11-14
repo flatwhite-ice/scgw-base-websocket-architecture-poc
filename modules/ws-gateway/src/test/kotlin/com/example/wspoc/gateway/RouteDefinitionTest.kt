@@ -29,7 +29,7 @@ class RouteDefinitionTest {
 
     @Nested
     @SpringBootTest(
-        properties = ["ws.gateway.auth.jwks-uri=", "WS_BACKEND_URI=ws://backend-vip:8081", "WS_CHAT_URI=ws://chat-vip:8084"],
+        properties = ["ws.gateway.auth.jwks-uri=", "WS_BACKEND_URI=ws://backend-vip:8090", "WS_CHAT_URI=ws://chat-vip:8091"],
     )
     @Import(WsGatewayApplicationTests.Keys::class)
     @ActiveProfiles("static")
@@ -39,7 +39,7 @@ class RouteDefinitionTest {
         @Test
         fun `static profile routes each service to a fixed uri`() {
             assertEquals(
-                mapOf("ws-backend" to URI.create("ws://backend-vip:8081"), "ws-chat" to URI.create("ws://chat-vip:8084")),
+                mapOf("ws-backend" to URI.create("ws://backend-vip:8090"), "ws-chat" to URI.create("ws://chat-vip:8091")),
                 routes.uris(),
             )
         }

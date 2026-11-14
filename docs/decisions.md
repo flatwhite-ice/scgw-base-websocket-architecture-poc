@@ -79,8 +79,8 @@
   - 신규 핸드셰이크는 503으로 거절하고, 기존 세션은 window 안의 랜덤 지터 시점에 1012 Service Restart로 닫는다(D13).
   - `spring.lifecycle.timeout-per-shutdown-phase`(35초)는 drain window(20초)보다 크게 잡았다.
 - **실행 프로필**
-  - 기본값(프로필 없음) = **relay**: gateway 모드, 8081. 게이트웨이의 기본 라우팅 대상(`localhost:8081`)과 맞물리고 JWKS가 필요 없다. `relay` 프로필은 명시용이며 기본값과 같다.
-  - `direct`: self 모드, 8083, JWKS=`http://localhost:8080/.well-known/jwks.json`. relay 인스턴스와 같은 머신에서 함께 띄울 수 있다.
+  - 기본값(프로필 없음) = **relay**: gateway 모드, 8090. 게이트웨이의 기본 라우팅 대상(`localhost:8090`)과 맞물리고 JWKS가 필요 없다. `relay` 프로필은 명시용이며 기본값과 같다.
+  - `direct`: self 모드, 8092, JWKS=`http://localhost:8070/.well-known/jwks.json`. relay 인스턴스와 같은 머신에서 함께 띄울 수 있다.
   - JWKS 빈은 `self` 모드이고 URI가 비어 있지 않을 때만 만든다. relay에서는 JWKS 갱신 루프가 돌지 않는다.
   - **변경 이력**
     1. 처음에는 JWKS URI를 `direct` 프로필에만 넣었다. 그래서 프로필 없이 기동하면 self 모드에 키가 없어 실패했다.
@@ -203,7 +203,7 @@
 - **변경:** Kotlin `RouteLocator` 빈과 `ws.gateway.backend.{mode,service-id,uri}`를 없애고, SCG 표준 방식인 `spring.cloud.gateway.server.webflux.routes`(RouteDefinition 리스트)로 옮겼다.
   - SCG 5.0에서 키 이름이 `spring.cloud.gateway.routes` → `spring.cloud.gateway.server.webflux.routes`로 바뀌었다(jar metadata에서 확인).
   - 이유: 라우트를 코드 수정·재빌드 없이 설정(ConfigMap, 프로필, 환경 변수)으로 바꿀 수 있고, 일반적인 SCG 운영 방식과 맞는다.
-- **대상 전환:** 기본 `application.yml`은 `lb:ws://ws-backend`(discovery). `static` 프로필(`application-static.yml`)은 `${WS_BACKEND_URI:ws://localhost:8081}`로 보낸다.
+- **대상 전환:** 기본 `application.yml`은 `lb:ws://ws-backend`(discovery). `static` 프로필(`application-static.yml`)은 `${WS_BACKEND_URI:ws://localhost:8090}`로 보낸다.
   - 주의: 리스트 프로퍼티는 프로필 사이에서 항목 단위로 병합되지 않고 **통째로 교체**된다. 그래서 `routes[0].uri`만 덮어쓰면 id·predicates가 사라진다. static 프로필은 라우트 전체를 다시 정의한다.
 - **D18 이후:** 라우트가 서비스마다 하나씩(ws-backend, ws-chat) 있다. static 프로필은 `WS_BACKEND_URI`, `WS_CHAT_URI`를 쓴다.
 - **검증:** `RouteDefinitionTest`가 두 경우의 바인딩 결과(uri)를 확인하고, `GatewayE2ETest`/`GatewayDrainTest`가 YAML 라우트로 실제 relay를 확인한다.
@@ -236,7 +236,7 @@
 
 ## D18. 서비스별 경로 라우팅과 ws-chat
 
-- **서비스:** ws-chat(`modules/ws-chat`, relay 8084 / direct 8085)을 추가했다. 엔드포인트는 `/ws/chat` 하나이고 방 단위 채팅이다(join / say / leave).
+- **서비스:** ws-chat(`modules/ws-chat`, relay 8091 / direct 8093)을 추가했다. 엔드포인트는 `/ws/chat` 하나이고 방 단위 채팅이다(join / say / leave).
 - **게이트웨이 라우트:**
   - `ws-backend`: `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`
   - `ws-chat`: `Path=/ws/chat/**` → `lb:ws://ws-chat` (`/ws/chat` 자신도 매칭)
@@ -247,3 +247,19 @@
 - **한계: 방은 인스턴스 로컬이다.** `ChatRooms`는 프로세스 메모리에 있어서 ws-chat을 여러 대 띄우면 같은 방 이름이라도 인스턴스마다 멤버가 따로다. 인스턴스 간 fan-out(Redis pub/sub 등)은 후속 과제로 둔다.
   - broadcast는 `trySend`로 보낸다. 느린 멤버 하나 때문에 다른 멤버가 막히지 않는 대신, 큐가 가득 찬 멤버의 메시지는 버려진다.
 - **검증:** `ChatTest`(방 전달, 방 분리, leave/disconnect, 오류, 401, `/ws/echo` 404), `GatewayE2ETest`(경로별로 해당 서비스만 핸드셰이크를 받음, 미라우팅 404), `RouteDefinitionTest`(discovery·static 각 2개 라우트)
+
+## D19. 로컬 포트 재배치
+
+| 앱 | 포트 | 이전 |
+|---|---|---|
+| auth-api | 8070 | 8080 |
+| ws-gateway | 8080 | 8082 |
+| ws-backend (relay, 기본) | 8090 | 8081 |
+| ws-chat (relay, 기본) | 8091 | 8084 |
+| ws-backend (`direct`) | 8092 | 8083 |
+| ws-chat (`direct`) | 8093 | 8085 |
+
+- 클라이언트 진입점인 게이트웨이를 8080에 두고, 인증은 8070, WebSocket 서비스는 809x 대역에 모았다. direct 인스턴스는 relay 인스턴스 바로 뒤 번호를 쓴다.
+- 스펙(handoff.md §5: auth 8080, backend 8081, gateway 8082)과 다르다. 바뀐 것은 로컬 기본 포트뿐이고, K8s에서는 Service가 포트를 정한다.
+- 바꾼 곳: 각 모듈 `application*.yml`(server.port, JWKS URI, 게이트웨이 discovery 목록과 static 기본 URI), `scripts/WsSmoke.java` 기본값, 문서. 이 문서와 progress.md의 과거 기록에 나오는 포트는 당시 값이다.
+

@@ -94,6 +94,13 @@
   - websocat: 게이트웨이 `/ws/echo` 응답은 `server=ws-backend@...:18081`, `/ws/chat` 응답은 `server=ws-chat@...:18084`. 두 사용자 채팅 전달 확인
   - curl: `/ws/echo`, `/ws/chat`, `/ws/chat/room1` 미인증 401, `/ws/unknown` 404
 
+### 포트 재배치 (2026-11-15)
+- auth 8070, gateway 8080, ws-backend 8090, ws-chat 8091, direct는 8092/8093으로 옮겼다(decisions D19). 위 기록의 포트는 당시 값이다.
+- `./gradlew build` 통과(25 suites, 실패 0)
+- 실제 프로세스: 포트 인자 없이 yml 기본값으로 auth 8070, ws-backend 8090/8092, ws-chat 8091/8093을 띄웠다. 8080은 IDE 앱이 쓰고 있어서 gateway만 `--server.port=18080`으로 띄웠고, discovery 대상과 JWKS URI는 yml 기본값을 그대로 썼다.
+  - `java scripts/WsSmoke.java http://localhost:8070 ws://localhost:18080 ws://localhost:8092 ws://localhost:8093` → **ALL OK**
+  - 게이트웨이 경유 응답의 `server`: `/ws/echo`는 `ws-backend@...:8090`, `/ws/chat`은 `ws-chat@...:8091`
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).

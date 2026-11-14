@@ -42,16 +42,16 @@ spring:
         simple:
           instances:
             ws-backend:
-              - uri: http://localhost:8081
+              - uri: http://localhost:8090
             ws-chat:
-              - uri: http://localhost:8084
+              - uri: http://localhost:8091
 server:
-  port: 8082
+  port: 8080
   shutdown: graceful
 
 ws:
   gateway:
     auth:
-      jwks-uri: http://localhost:8080/.well-known/jwks.json
+      jwks-uri: http://localhost:8070/.well-known/jwks.json
     drain:
       window: 20s

@@ -19,30 +19,30 @@ websocat --version        # websocat 1.14.1
 
 | 앱 | 포트 | 실행 |
 |---|---|---|
-| auth-api | 8080 | `./gradlew :modules:auth-api:bootRun` |
-| ws-backend (relay, 기본값) | 8081 | `./gradlew :modules:ws-backend:bootRun` |
-| ws-gateway | 8082 | `./gradlew :modules:ws-gateway:bootRun` |
-| ws-chat (relay, 기본값) | 8084 | `./gradlew :modules:ws-chat:bootRun` |
-| ws-backend (direct, 선택) | 8083 | `./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'` |
-| ws-chat (direct, 선택) | 8085 | `./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'` |
+| auth-api | 8070 | `./gradlew :modules:auth-api:bootRun` |
+| ws-gateway | 8080 | `./gradlew :modules:ws-gateway:bootRun` |
+| ws-backend (relay, 기본값) | 8090 | `./gradlew :modules:ws-backend:bootRun` |
+| ws-chat (relay, 기본값) | 8091 | `./gradlew :modules:ws-chat:bootRun` |
+| ws-backend (direct, 선택) | 8092 | `./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'` |
+| ws-chat (direct, 선택) | 8093 | `./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'` |
 
 - 경로 구성
-  - relay: 클라이언트 → **8082(gateway)** → 경로에 따라
-    - `/ws/echo`, `/ws/push` → 8081(ws-backend)
-    - `/ws/chat`, `/ws/chat/...` → 8084(ws-chat)
+  - relay: 클라이언트 → **8080(gateway)** → 경로에 따라
+    - `/ws/echo`, `/ws/push` → 8090(ws-backend)
+    - `/ws/chat`, `/ws/chat/...` → 8091(ws-chat)
     - 그 외 `/ws/...` → 게이트웨이가 404
-  - direct: 클라이언트 → **8083(ws-backend)** 또는 **8085(ws-chat)**
-- relay 인스턴스(8081, 8084)는 게이트웨이가 넣어 준 헤더를 신뢰한다. 따라서 클라이언트는 항상 8082로 접속한다.
+  - direct: 클라이언트 → **8092(ws-backend)** 또는 **8093(ws-chat)**
+- relay 인스턴스(8090, 8091)는 게이트웨이가 넣어 준 헤더를 신뢰한다. 따라서 클라이언트는 항상 8080으로 접속한다.
 
 ## 2. 토큰과 티켓 발급
 
 ```bash
 # access token: 유효 15분, 여러 번 사용 가능
-TOKEN=$(curl -s -X POST localhost:8080/auth/token \
+TOKEN=$(curl -s -X POST localhost:8070/auth/token \
   -H 'content-type: application/json' -d '{"userId":"u1"}' | jq -r .token)
 
 # WS 티켓: 유효 30초, 1회용. 연결할 때마다 새로 발급한다
-TICKET=$(curl -s -X POST localhost:8080/auth/ws-ticket \
+TICKET=$(curl -s -X POST localhost:8070/auth/ws-ticket \
   -H "authorization: Bearer $TOKEN" | jq -r .ticket)
 ```
 
@@ -56,9 +56,9 @@ TICKET=$(curl -s -X POST localhost:8080/auth/ws-ticket \
 ## 3. 대화형 연결
 
 ```bash
-websocat ws://localhost:8082/ws/echo -H "Authorization: Bearer $TOKEN"
+websocat ws://localhost:8080/ws/echo -H "Authorization: Bearer $TOKEN"
 # 또는
-websocat "ws://localhost:8082/ws/echo?ticket=$TICKET"
+websocat "ws://localhost:8080/ws/echo?ticket=$TICKET"
 ```
 
 연결된 뒤 한 줄씩 입력하면 서버 응답이 바로 출력된다. 종료는 `Ctrl+C`다.
@@ -82,7 +82,7 @@ websocat "ws://localhost:8082/ws/echo?ticket=$TICKET"
 
 모든 서버 메시지(echo, push, error)에는 그 메시지를 보낸 **backend 인스턴스**가 `server` 필드로 들어 있다.
 
-- 형식은 `<앱 이름>@<호스트>:<실제 포트>`이다. 예: `ws-backend@flatwhite-mbp.local:8081`
+- 형식은 `<앱 이름>@<호스트>:<실제 포트>`이다. 예: `ws-backend@flatwhite-mbp.local:8090`
   - K8s에서는 `HOSTNAME`(파드 이름)이 호스트 자리에 들어간다.
   - `ws.instance-id` 설정으로 직접 지정할 수도 있다.
 - gateway를 거쳐도 backend 값이 찍힌다. gateway는 프레임을 수정하지 않고 그대로 중계한다.
@@ -110,23 +110,23 @@ websocat "ws://localhost:8082/ws/echo?ticket=$TICKET"
 ```bash
 # echo (Bearer)
 echo '{"type":"echo","id":"1","ts":0,"payload":"hello"}' \
-  | websocat -n -1 ws://localhost:8082/ws/echo -H "Authorization: Bearer $TOKEN"
-# → {"type":"echo","id":"1","ts":0,"payload":"hello","srvTs":...,"userId":"u1","server":"ws-backend@<host>:8081"}
+  | websocat -n -1 ws://localhost:8080/ws/echo -H "Authorization: Bearer $TOKEN"
+# → {"type":"echo","id":"1","ts":0,"payload":"hello","srvTs":...,"userId":"u1","server":"ws-backend@<host>:8090"}
 
 # echo (티켓)
-TICKET=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "authorization: Bearer $TOKEN" | jq -r .ticket)
+TICKET=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "authorization: Bearer $TOKEN" | jq -r .ticket)
 echo '{"type":"echo","id":"2","payload":"via-ticket"}' \
-  | websocat -n -1 "ws://localhost:8082/ws/echo?ticket=$TICKET"
-# → {"type":"echo","id":"2","payload":"via-ticket","srvTs":...,"userId":"u1","server":"ws-backend@<host>:8081"}
+  | websocat -n -1 "ws://localhost:8080/ws/echo?ticket=$TICKET"
+# → {"type":"echo","id":"2","payload":"via-ticket","srvTs":...,"userId":"u1","server":"ws-backend@<host>:8090"}
 
 # push 수신: stdin을 열어 둔 채 몇 개만 받기
-sleep 3 | websocat ws://localhost:8082/ws/push -H "Authorization: Bearer $TOKEN" | head -2
-# → {"type":"push","topic":"ticker","seq":0,...,"server":"ws-backend@<host>:8081",...}
+sleep 3 | websocat ws://localhost:8080/ws/push -H "Authorization: Bearer $TOKEN" | head -2
+# → {"type":"push","topic":"ticker","seq":0,...,"server":"ws-backend@<host>:8090",...}
 #   {"type":"push","topic":"ticker","seq":1,...}
 
 # subscribe 파라미터 변경 후 스트림 받기
 { echo '{"type":"subscribe","topic":"fast","intervalMs":200,"payloadBytes":8}'; sleep 1; } \
-  | websocat ws://localhost:8082/ws/echo -H "Authorization: Bearer $TOKEN" | head -3
+  | websocat ws://localhost:8080/ws/echo -H "Authorization: Bearer $TOKEN" | head -3
 # → {"type":"push","topic":"fast","seq":0,...,"payload":"xxxxxxxx"} ... (seq 0,1,2)
 ```
 
@@ -136,18 +136,18 @@ sleep 3 | websocat ws://localhost:8082/ws/push -H "Authorization: Bearer $TOKEN"
 
 ```bash
 # 티켓 재사용 → 401 (위에서 이미 쓴 $TICKET으로 다시 연결)
-echo '{"type":"echo","id":"3"}' | websocat -n -1 "ws://localhost:8082/ws/echo?ticket=$TICKET"
+echo '{"type":"echo","id":"3"}' | websocat -n -1 "ws://localhost:8080/ws/echo?ticket=$TICKET"
 # → websocat: WebSocketError: ... Received unexpected status code (401 Unauthorized)
 
 # 자격증명 없음 → 401
-websocat -1 ws://localhost:8082/ws/echo </dev/null
+websocat -1 ws://localhost:8080/ws/echo </dev/null
 # → ... (401 Unauthorized)
 
 # 헤더 스푸핑은 무시된다: X-User-Id: evil을 보내도 토큰의 사용자(u1)로 처리된다
-TICKET=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "authorization: Bearer $TOKEN" | jq -r .ticket)
+TICKET=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "authorization: Bearer $TOKEN" | jq -r .ticket)
 echo '{"type":"echo","id":"spoof"}' \
-  | websocat -n -1 "ws://localhost:8082/ws/echo?ticket=$TICKET" -H "X-User-Id: evil"
-# → {"type":"echo","id":"spoof",...,"userId":"u1","server":"ws-backend@<host>:8081"}
+  | websocat -n -1 "ws://localhost:8080/ws/echo?ticket=$TICKET" -H "X-User-Id: evil"
+# → {"type":"echo","id":"spoof",...,"userId":"u1","server":"ws-backend@<host>:8090"}
 ```
 
 ### 4.3 curl로 업그레이드 전 401 확인
@@ -158,13 +158,13 @@ websocat 없이 상태 코드만 본다. 인증 실패는 업그레이드(101) �
 curl -s -o /dev/null -w '%{http_code}\n' \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-  localhost:8082/ws/echo
+  localhost:8080/ws/echo
 # → 401
 ```
 
 ## 5. 경로별 라우팅: ws-chat
 
-같은 게이트웨이(8082)에서 경로만 `/ws/chat`으로 바꾸면 ws-chat으로 연결된다. 응답의 `server` 필드로 어느 서비스가 처리했는지 보인다.
+같은 게이트웨이(8080)에서 경로만 `/ws/chat`으로 바꾸면 ws-chat으로 연결된다. 응답의 `server` 필드로 어느 서비스가 처리했는지 보인다.
 
 ### 프로토콜
 
@@ -184,17 +184,17 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 ```bash
 # 터미널 1 (u2): 방에 들어가서 기다린다
-T2=$(curl -s -X POST localhost:8080/auth/token -H 'content-type: application/json' -d '{"userId":"u2"}' | jq -r .token)
-websocat "ws://localhost:8082/ws/chat?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $T2" | jq -r .ticket)"
+T2=$(curl -s -X POST localhost:8070/auth/token -H 'content-type: application/json' -d '{"userId":"u2"}' | jq -r .token)
+websocat "ws://localhost:8080/ws/chat?ticket=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "Authorization: Bearer $T2" | jq -r .ticket)"
 {"type":"join","room":"lobby"}
-# → {"type":"joined","room":"lobby","userId":"u2","members":1,"server":"ws-chat@<host>:8084"}
+# → {"type":"joined","room":"lobby","userId":"u2","members":1,"server":"ws-chat@<host>:8091"}
 
 # 터미널 2 (u1): 같은 방에 들어가서 말한다
-websocat "ws://localhost:8082/ws/chat?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
+websocat "ws://localhost:8080/ws/chat?ticket=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
 {"type":"join","room":"lobby"}
-# → {"type":"joined","room":"lobby","userId":"u1","members":2,"server":"ws-chat@<host>:8084"}
+# → {"type":"joined","room":"lobby","userId":"u1","members":2,"server":"ws-chat@<host>:8091"}
 {"type":"say","room":"lobby","text":"hi"}
-# → {"type":"message","room":"lobby","from":"u1","text":"hi","srvTs":...,"server":"ws-chat@<host>:8084"}
+# → {"type":"message","room":"lobby","from":"u1","text":"hi","srvTs":...,"server":"ws-chat@<host>:8091"}
 #   터미널 1에도 같은 message가 도착한다
 ```
 
@@ -202,31 +202,31 @@ websocat "ws://localhost:8082/ws/chat?ticket=$(curl -s -X POST localhost:8080/au
 
 ```bash
 # 같은 게이트웨이, 경로만 다르다: server 필드가 서비스마다 다르다
-echo '{"type":"echo","id":"1"}' | websocat -n1 "ws://localhost:8082/ws/echo?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
-# → {"type":"echo","id":"1",...,"server":"ws-backend@<host>:8081"}
+echo '{"type":"echo","id":"1"}' | websocat -n1 "ws://localhost:8080/ws/echo?ticket=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
+# → {"type":"echo","id":"1",...,"server":"ws-backend@<host>:8090"}
 
 # 라우트가 없는 경로 → 게이트웨이가 404 (인증 필터도 실행되지 않는다)
-websocat -n1 "ws://localhost:8082/ws/unknown?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
+websocat -n1 "ws://localhost:8080/ws/unknown?ticket=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
 # → websocat: WebSocketError: ... Received unexpected status code (404 Not Found)
 
 # curl로 보면: 라우트가 있는 경로는 미인증 401, 없는 경로는 404
 for p in /ws/echo /ws/chat /ws/chat/room1 /ws/unknown; do
   printf '%s ' $p; curl -s -o /dev/null -w '%{http_code}\n' -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
-    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' localhost:8082$p
+    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' localhost:8080$p
 done
 # → /ws/echo 401, /ws/chat 401, /ws/chat/room1 401, /ws/unknown 404
 ```
 
 ## 6. direct 경로 비교
 
-서비스를 `direct` 프로필(ws-backend 8083, ws-chat 8085)로 띄운 뒤 **포트만 바꿔** 같은 명령을 쓴다.
+서비스를 `direct` 프로필(ws-backend 8092, ws-chat 8093)로 띄운 뒤 **포트만 바꿔** 같은 명령을 쓴다.
 
 ```bash
-echo '{"type":"echo","id":"d1"}' | websocat -n -1 ws://localhost:8083/ws/echo -H "Authorization: Bearer $TOKEN"
-websocat ws://localhost:8085/ws/chat -H "Authorization: Bearer $TOKEN"
+echo '{"type":"echo","id":"d1"}' | websocat -n -1 ws://localhost:8092/ws/echo -H "Authorization: Bearer $TOKEN"
+websocat ws://localhost:8093/ws/chat -H "Authorization: Bearer $TOKEN"
 ```
 
-direct 서비스는 자기 엔드포인트만 가진다. 예를 들어 8085에 `/ws/echo`로 연결하면, 인증은 통과하지만 핸들러가 없어 404다.
+direct 서비스는 자기 엔드포인트만 가진다. 예를 들어 8093에 `/ws/echo`로 연결하면, 인증은 통과하지만 핸들러가 없어 404다.
 
 ## 7. 자동 스모크 테스트 (websocat 불필요)
 
@@ -236,8 +236,8 @@ JDK만으로 한 번에 확인한다. 주소마다 그 주소가 제공하는 �
 - 라우트가 없는 `/ws/unknown` → 404
 
 ```bash
-java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082                                             # relay만(두 서비스 + 라우팅)
-java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083 ws://localhost:8085     # relay + direct 둘
+java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080                                             # relay만(두 서비스 + 라우팅)
+java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093     # relay + direct 둘
 # → ALL OK
 ```
 

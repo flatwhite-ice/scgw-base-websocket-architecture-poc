@@ -7,10 +7,10 @@ spring:
         webflux:
           routes:
             - id: ws-backend
-              uri: ${WS_BACKEND_URI:ws://localhost:8081}
+              uri: ${WS_BACKEND_URI:ws://localhost:8090}
               predicates:
                 - Path=/ws/echo,/ws/push
             - id: ws-chat
-              uri: ${WS_CHAT_URI:ws://localhost:8084}
+              uri: ${WS_CHAT_URI:ws://localhost:8091}
               predicates:
                 - Path=/ws/chat/**
