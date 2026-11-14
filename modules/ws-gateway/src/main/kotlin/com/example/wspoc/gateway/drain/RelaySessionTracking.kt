@@ -9,6 +9,7 @@ import org.springframework.web.reactive.socket.WebSocketSession
 import org.springframework.web.reactive.socket.server.WebSocketService
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import java.time.Duration
 
 /**
  * SCG가 relay 중인 클라이언트 세션을 drain에서 볼 수 있게 한다.
@@ -41,20 +42,27 @@ class TrackingWebSocketService(
     override fun handleRequest(
         exchange: ServerWebExchange,
         handler: WebSocketHandler,
-    ): Mono<Void> = delegate.handleRequest(exchange, TrackingHandler(handler, registry))
+    ): Mono<Void> = delegate.handleRequest(exchange, TrackingHandler(handler, registry, RelayLogContext.of(exchange)))
 
     private class TrackingHandler(
         private val delegate: WebSocketHandler,
         private val registry: RelaySessionRegistry,
+        private val context: RelayLogContext,
     ) : WebSocketHandler {
         // SCG는 이것으로 subprotocol을 협상하므로 그대로 넘겨야 한다.
         override fun getSubProtocols(): List<String> = delegate.subProtocols
 
-        override fun handle(session: WebSocketSession): Mono<Void> =
-            Mono
+        override fun handle(session: WebSocketSession): Mono<Void> {
+            val openedAt = System.nanoTime()
+            return Mono
                 .defer {
                     registry.register(session)
+                    RelaySessionLog.opened(session, context, registry.activeCount)
                     delegate.handle(session)
-                }.doFinally { registry.unregister(session.id) }
+                }.doFinally {
+                    registry.unregister(session.id)
+                    RelaySessionLog.closed(session, context, Duration.ofNanos(System.nanoTime() - openedAt), registry.activeCount)
+                }
+        }
     }
 }

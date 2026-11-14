@@ -110,6 +110,15 @@
   - `java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093` → **ALL OK**
   - curl 업그레이드 상태: `/ws/public/push` 101, `/ws/echo`·`/ws/push`·`/ws/chat` 401, `/ws/unknown` 404. WsAuth 라우트의 일반 `GET /ws/echo`도 401
 
+### 세션 열림/종료 로그 (2026-11-15)
+- kotlin-logging 8.0.7을 추가했다. SLF4J와 Logback은 Boot BOM 버전 그대로다.
+- ws-backend·ws-chat(core `SessionLog`)과 ws-gateway(`RelaySessionLog`)가 `ws.session` 로거에 세션 열림/종료와 active 수를 남긴다. 기본은 켜져 있고, 부하 실험 때는 `logging.level.ws.session=WARN`으로 끈다(decisions D21).
+- `./gradlew build` 통과(31 suites, 86 tests, 실패 0). 새 테스트는 `SessionLogTest` 4개, `RelaySessionLogTest` 2개다.
+  - 작성 중에 `= runBlocking { ... }`의 마지막 식이 값이면 JUnit이 그 테스트를 조용히 건너뛰는 것을 발견했다. 전체 테스트를 선언 수와 실행 수로 대조해 다른 누락이 없음을 확인했다.
+- 실제 프로세스(기본 포트): smoke **ALL OK**
+  - 로그는 gateway 16줄, backend 10줄, chat 6줄이다. 정상 종료는 `code=1000 reason=bye closedBy=client`로 남았다.
+  - 3개 앱 로그에서 티켓 원문은 0건이었다.
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
@@ -120,3 +129,4 @@
 - ws-chat 인스턴스 간 방 fan-out(Redis pub/sub 등). 지금은 방이 인스턴스 로컬이라 여러 대를 띄우면 방이 쪼개진다(decisions D18).
 - M4 compose / M5 매니페스트에 ws-chat 추가(스펙의 "ws-backend x2"와 별도 서비스).
 - `WsAuth` 라우트 필터에 설정 항목 추가 검토(예: 필요한 scope). 지금은 인자 없는 `- WsAuth`다(decisions D20).
+- JWKS 초기 조회 실패 후 5초(`minRefetchInterval`) 동안은 미등록 kid가 와도 재조회하지 않아 핸드셰이크가 401이 된다. 앱을 동시에 띄우면 auth-api보다 먼저 뜬 게이트웨이나 direct 서비스에서 재현된다. 실패 직후에는 재시도를 허용하는 방안을 검토한다.

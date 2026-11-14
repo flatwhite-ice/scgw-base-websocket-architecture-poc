@@ -80,7 +80,9 @@ Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-c
 - **Never block an event loop.** BlockHound runs in every test JVM. Isolate unavoidable blocking on `Dispatchers.IO`/`boundedElastic` and leave a comment saying why. One-time class-init exceptions go in `modules/common-auth/src/testFixtures/.../WsPocBlockHoundIntegration.kt`, each with a reason.
 - Write handlers as `suspend`/`Flow`, and convert to and from Reactor only at the boundaries. Map `WebSocketMessage` payloads synchronously inside `receive().map{}`, because Reactor Netty frees the buffer right after `onNext`.
 - Wrap `session.close()` in `withContext(NonCancellable)`. If it's cancelled mid-write, the close frame is lost and the client sees 1006 (D9).
-- No per-connection or per-message INFO logs, since they distort the load tests. The access log is opt-in (`ws.access-log.enabled`) and masks `ticket=`.
+- Logging: no per-message logs. Session open/close logs go to the dedicated `ws.session` logger at INFO and are on by default (`SessionLog` in core, `RelaySessionLog` in the gateway; D21). Turn them off for load tests with `logging.level.ws.session=WARN`, because per-connection logs distort the results. Log URI paths only, never the query (`ticket=`). The access log is opt-in (`ws.access-log.enabled`) and masks `ticket=`.
+- New log code uses kotlin-logging (`KotlinLogging.logger`, lazy lambdas). SLF4J and Logback come from Spring Boot and its BOM; don't declare or pin them.
+- Spring tests that end in `= runBlocking { ... }` must return `Unit`. If the last expression is a value, the method isn't void and JUnit silently skips it.
 - Put configuration in `@ConfigurationProperties` data classes (`WsProperties`, `GatewayProperties`, `AuthProperties`). To disable JWKS in tests, set the URI to `""`; the conditions check for a blank value.
 - Tests:
   - `ws-backend-core` `testFixtures` provides `TestKeys` (stands in for auth-api) and `WsTestClient`. The service and gateway tests reuse them.

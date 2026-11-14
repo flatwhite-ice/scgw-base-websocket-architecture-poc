@@ -6,6 +6,7 @@ spring-cloud = "2025.1.4"
 ktlint-gradle = "14.2.0"
 nimbus-jose-jwt = "10.10"
 blockhound = "1.0.18.RELEASE"
+kotlin-logging = "8.0.7"
 
 [libraries]
 # BOM
@@ -21,6 +22,8 @@ ktlint-gradle-plugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", versio
 # 아래에서 version.ref가 없는 항목은 Spring Boot / Spring Cloud BOM이 버전을 관리한다
 nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbus-jose-jwt" }
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
+# 로깅 파사드(SLF4J 위). slf4j-api와 logback은 Spring Boot BOM이 버전을 관리하므로 여기서 고정하지 않는다.
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core" }
 kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-reactor" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test" }

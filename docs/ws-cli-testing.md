@@ -269,7 +269,30 @@ java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localho
 # → ALL OK
 ```
 
-## 9. 참고: 서버가 연결을 닫는 경우
+## 9. 세션 로그 보기
+
+ws-backend, ws-chat, ws-gateway는 세션이 열리고 닫힐 때 `ws.session` 로거로 한 줄씩 남긴다(decisions D21). 아래는 smoke 실행 중 실제 출력이다(id 일부 생략).
+
+```text
+# gateway
+ws relay opened id=…-00000001-… route=ws-backend path=/ws/echo user=smoke-user upstream=localhost:8090 remote=127.0.0.1:62158 active=1
+ws relay opened id=…-00000002-… route=ws-chat path=/ws/chat user=smoke-user upstream=localhost:8091 remote=127.0.0.1:62159 active=2
+ws relay closed id=…-00000001-… route=ws-backend path=/ws/echo user=smoke-user upstream=localhost:8090 code=1000 reason=bye durationMs=… active=1
+# ws-backend
+ws session opened id=… path=/ws/echo user=smoke-user anonymous=false remote=127.0.0.1:62162 active=2
+ws session closed id=… path=/ws/echo user=smoke-user code=1000 reason=bye closedBy=client durationMs=… active=1
+```
+
+- `active`는 그 프로세스의 현재 세션 수다. backend는 엔드포인트 합계, gateway는 relay 중인 클라이언트 수다.
+- `closedBy=server`이면 서버가 닫았다(예: `code=3000 reason=token expired`, `code=1001`). 익명 엔드포인트는 `user=anonymous anonymous=true`, gateway에서는 `user=-`로 나온다.
+- relay에서 클라이언트가 close 프레임 없이 끊으면 gateway는 1006, backend는 1002로 기록된다(SCG 변환, D14).
+- 부하 실험에서는 끈다: `--logging.level.ws.session=WARN`
+
+```bash
+./gradlew :modules:ws-gateway:bootRun --args='--logging.level.ws.session=WARN'
+```
+
+## 10. 참고: 서버가 연결을 닫는 경우
 
 모두 RFC 6455 §7.4 기준 코드다. 이 범위의 코드만 Spring Cloud Gateway를 거쳐도 그대로 전달된다(decisions D13, D14).
 

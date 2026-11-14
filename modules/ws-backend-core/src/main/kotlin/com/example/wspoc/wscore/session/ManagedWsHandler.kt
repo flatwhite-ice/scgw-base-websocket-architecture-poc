@@ -17,7 +17,6 @@ import kotlinx.coroutines.reactor.asFlux
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.reactor.mono
 import kotlinx.coroutines.withContext
-import org.slf4j.LoggerFactory
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.web.reactive.socket.CloseStatus
 import org.springframework.web.reactive.socket.WebSocketHandler
@@ -55,7 +54,6 @@ class ManagedWsHandler(
     private val runtime: WsSessionRuntime,
     private val protocolFactory: () -> WsSessionProtocol,
 ) : WebSocketHandler {
-    private val log = LoggerFactory.getLogger(javaClass)
     private val props = runtime.props
 
     /** 세션 송신 큐가 가득 차서(느린 소비자) [WsSessionContext.trySend]가 버린 메시지 수. */
@@ -95,6 +93,11 @@ class ManagedWsHandler(
         @Volatile
         private var pongSeen = true
 
+        /** 서버가 보낸 close 상태. null이면 상대(클라이언트, relay에서는 게이트웨이)가 닫은 것이다. */
+        @Volatile
+        private var serverCloseStatus: CloseStatus? = null
+        private val openedAt = System.nanoTime()
+
         override val id: String get() = session.id
         override val serverId: String get() = runtime.serverIdentity.id
         override lateinit var scope: CoroutineScope
@@ -103,6 +106,7 @@ class ManagedWsHandler(
             coroutineScope {
                 scope = this
                 runtime.registry.register(session.id) { status -> launch { close(status) } }
+                SessionLog.opened(session, principal.userId, anonymous, runtime.registry.activeCount)
                 try {
                     launch { session.send(outbound.consumeAsFlow().asFlux()).awaitSingleOrNull() }
                     launch { heartbeat() }
@@ -118,11 +122,32 @@ class ManagedWsHandler(
                     // inbound 종료 = 연결 종료(상대 또는 우리가 닫음).
                 } finally {
                     runtime.registry.unregister(session.id)
+                    logClosed(runtime.registry.activeCount)
                     protocol.onClose(this@SessionRun)
                     outbound.close()
                     coroutineContext.cancelChildren()
                 }
             }
+
+        /**
+         * 종료 로그. 서버가 닫았으면 그 상태를 바로 쓴다. 상대가 닫았으면 받은 close 프레임의 상태를 기다리되
+         * (suspend하지 않고 구독), 프레임 없이 끊겼으면 1005(No Status)로 남긴다.
+         */
+        private fun logClosed(active: Int) {
+            if (!SessionLog.enabled) return
+            val durationMs = Duration.ofNanos(System.nanoTime() - openedAt).toMillis()
+            val byServer = serverCloseStatus
+            if (byServer != null) {
+                SessionLog.closed(session, principal.userId, byServer, "server", durationMs, active)
+                return
+            }
+            session
+                .closeStatus()
+                .timeout(CLOSE_STATUS_WAIT)
+                .onErrorResume { Mono.empty() }
+                .defaultIfEmpty(CloseStatus.NO_STATUS_CODE)
+                .subscribe { SessionLog.closed(session, principal.userId, it, "client", durationMs, active) }
+        }
 
         private fun toInbound(message: WebSocketMessage): Inbound =
             when (message.type) {
@@ -190,8 +215,13 @@ class ManagedWsHandler(
          */
         private suspend fun close(status: CloseStatus) {
             if (!closing.compareAndSet(false, true)) return
-            log.debug("Closing session {} user={} status={}", session.id, principal.userId, status)
+            serverCloseStatus = status
             withContext(NonCancellable) { session.close(status).awaitSingleOrNull() }
         }
+    }
+
+    private companion object {
+        /** 상대가 닫은 경우 close 프레임 상태를 기다리는 최대 시간(로그용). */
+        val CLOSE_STATUS_WAIT: Duration = Duration.ofSeconds(1)
     }
 }

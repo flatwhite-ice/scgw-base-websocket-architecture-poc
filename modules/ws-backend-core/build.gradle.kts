@@ -10,6 +10,7 @@ dependencies {
     api(libs.spring.boot.starter.webflux)
     api(libs.kotlinx.coroutines.reactor)
     api(libs.jackson.module.kotlin)
+    implementation(libs.kotlin.logging)
 
     testImplementation(testFixtures(project(":modules:common-auth")))
 

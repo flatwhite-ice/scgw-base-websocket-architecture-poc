@@ -18,6 +18,8 @@
 | Caffeine | 3.2.4 | Boot BOM 관리 |
 | BlockHound | 1.0.18.RELEASE | Maven Central 최신 |
 | ktlint-gradle | 14.2.0 | Gradle Plugin Portal 최신, `ktlint_official` 스타일 |
+| kotlin-logging | 8.0.7 | Maven Central 최신(2026-11-10). D21에서 추가 |
+| SLF4J / Logback | 2.0.20 / 1.5.38 | Boot BOM 관리. 따로 고정하지 않는다(D21) |
 
 모든 버전은 `gradle/libs.versions.toml`에 고정했다. BOM이 관리하는 라이브러리는 catalog에 버전을 적지 않는다.
 
@@ -282,3 +284,24 @@
   - `MissingAuthFilterTest`에서 확인했다. 클라이언트는 핸드셰이크 실패로 끝났고, 위조 `X-User-Id`를 보내도 backend 세션 수는 늘지 않았다.
   - 다만 이 경우 클라이언트가 받는 응답은 backend 401이 깔끔하게 전달된 것이 아니다(SCG의 101 선응답, D14). 그래서 이것은 보조 방어선이다. 1차 방어는 라우트 선언이고, `RouteDefinitionTest`가 라우트별 WsAuth 유무를 고정한다.
 - **참고:** 서비스(direct)에서 존재하지 않는 `/ws/` 경로는 인증이 먼저라 자격증명이 없으면 401이고, 있으면 404다. 게이트웨이에서는 라우트가 없으면 항상 404다.
+
+## D21. 세션 열림/종료 로그
+
+- **목적:** 연결이 생기고 끊길 때 세션 단위로 무엇이 일어났는지와 현재 active 세션 수를 로그로 본다. 대상은 ws-backend, ws-chat, ws-gateway다.
+- **라이브러리:** `io.github.oshai:kotlin-logging-jvm` 8.0.7(SLF4J 위의 Kotlin 파사드). 메시지를 람다로 넘기므로 로거가 꺼져 있으면 문자열을 만들지 않는다.
+  - SLF4J와 Logback은 Spring Boot starter가 이미 넣고 BOM이 버전을 관리한다(2.0.20 / 1.5.38). 따로 선언하거나 고정하지 않는다. 예시로 받은 `logback-classic:1.5.5`를 고정하면 오히려 다운그레이드가 된다.
+  - 기존 코드는 그대로 둔다(SLF4J 직접 사용, common-auth의 JUL). 새 로그만 kotlin-logging을 쓴다.
+- **로거와 수준:** 전용 로거 `ws.session`에 INFO로 남기고 **기본은 켜 둔다**(각 앱 `application.yml`의 `logging.level.ws.session: INFO`).
+  - 부하 실험에서는 `--logging.level.ws.session=WARN`(또는 `LOGGING_LEVEL_WS_SESSION=WARN`)으로 끈다. 2만 세션 규모에서 연결 단위 로그는 결과를 왜곡한다. 이전 규칙("연결 단위 INFO 로그 금지")을 "부하 실험 때는 끈다"로 바꿨다.
+- **backend(core `ManagedWsHandler` → `SessionLog`):**
+  - `ws session opened id path user anonymous remote active`
+  - `ws session closed id path user code reason closedBy durationMs active`
+  - `closedBy=server`면 서버가 보낸 코드(3000/3008/1001 등)다. `client`면 상대가 보낸 close 프레임의 코드이고, 프레임 없이 끊기면 1005다. relay에서는 상대가 게이트웨이다.
+  - `active`는 그 인스턴스의 `SessionRegistry.activeCount`(모든 엔드포인트 합계)다. 열림은 등록 직후, 종료는 해제 직후의 값이다.
+- **gateway(`TrackingWebSocketService` → `RelaySessionLog`):**
+  - `ws relay opened id route path user upstream remote active`
+  - `ws relay closed id route path user upstream code reason durationMs active`
+  - `user`는 WsAuth가 넣은 `X-User-Id`이고, 익명 라우트는 `-`다. `upstream`은 LoadBalancer가 고른 `host:port`다. `active`는 relay 중인 클라이언트 세션 수다.
+- **민감 정보:** URI는 경로만 남긴다. 익명 라우트는 쿼리를 지우지 않으므로, `?ticket=`이 붙어 와도 로그에 남지 않게 하기 위해서다(`RelaySessionLogTest`).
+- **종료 코드를 읽는 법:** relay에서 클라이언트가 close 프레임 없이 끊으면 게이트웨이는 1006, backend는 1002로 남는다. SCG가 1006을 1002로 바꿔 전달하기 때문이다(D14).
+- **검증:** `SessionLogTest`(열림/종료, 서버 종료 3000, 익명, WARN이면 꺼짐), `RelaySessionLogTest`(route/user/upstream, 쿼리 미기록)

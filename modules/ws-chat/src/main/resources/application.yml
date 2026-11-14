@@ -19,3 +19,9 @@ ws:
     max-missed: 2
   drain:
     window: 20s
+
+logging:
+  level:
+    # 세션 열림/종료 로그(D21). 부하 실험(E1~E5)에서는 WARN으로 끈다: 연결 단위 로그가 결과를 왜곡한다.
+    #   예) --logging.level.ws.session=WARN  또는  LOGGING_LEVEL_WS_SESSION=WARN
+    ws.session: INFO
