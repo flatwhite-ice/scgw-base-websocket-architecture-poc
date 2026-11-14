@@ -2,8 +2,8 @@ package com.example.wspoc.gateway
 
 import com.example.wspoc.auth.common.GatewayHeaders
 import com.example.wspoc.auth.common.KeySource
-import com.example.wspoc.backend.testing.TestKeys
-import com.example.wspoc.backend.testing.WsTestClient
+import com.example.wspoc.wscore.testing.TestKeys
+import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.boot.test.context.SpringBootTest

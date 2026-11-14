@@ -1,8 +1,8 @@
 package com.example.wspoc.backend
 
-import com.example.wspoc.backend.session.SessionRegistry
-import com.example.wspoc.backend.testing.TestKeys
-import com.example.wspoc.backend.testing.WsTestClient
+import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.TestKeys
+import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest

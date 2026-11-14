@@ -2,7 +2,7 @@ package com.example.wspoc.backend
 
 import com.example.wspoc.auth.common.AuthPrincipal
 import com.example.wspoc.auth.common.GatewayHeaders
-import com.example.wspoc.backend.testing.WsTestClient
+import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort

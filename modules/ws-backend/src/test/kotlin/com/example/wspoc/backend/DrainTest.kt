@@ -1,9 +1,9 @@
 package com.example.wspoc.backend
 
-import com.example.wspoc.backend.session.DrainCoordinator
-import com.example.wspoc.backend.session.SessionRegistry
-import com.example.wspoc.backend.testing.TestKeys
-import com.example.wspoc.backend.testing.WsTestClient
+import com.example.wspoc.wscore.session.DrainCoordinator
+import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.TestKeys
+import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout

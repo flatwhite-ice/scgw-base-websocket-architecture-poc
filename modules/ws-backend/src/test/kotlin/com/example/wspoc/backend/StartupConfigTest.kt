@@ -2,6 +2,8 @@ package com.example.wspoc.backend
 
 import com.example.wspoc.auth.common.JwtVerifier
 import com.example.wspoc.auth.common.KeySource
+import com.example.wspoc.wscore.JwksKeySourceLifecycle
+import com.example.wspoc.wscore.WsProperties
 import org.junit.jupiter.api.Nested
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Autowired

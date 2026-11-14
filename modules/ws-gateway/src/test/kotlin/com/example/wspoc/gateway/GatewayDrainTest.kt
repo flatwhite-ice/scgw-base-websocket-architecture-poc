@@ -1,10 +1,10 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.backend.session.SessionRegistry
-import com.example.wspoc.backend.testing.TestKeys
-import com.example.wspoc.backend.testing.WsTestClient
 import com.example.wspoc.gateway.drain.GatewayDrainCoordinator
 import com.example.wspoc.gateway.drain.RelaySessionRegistry
+import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.TestKeys
+import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking

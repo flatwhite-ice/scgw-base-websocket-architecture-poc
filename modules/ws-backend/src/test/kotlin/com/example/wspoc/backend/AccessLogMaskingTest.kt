@@ -1,7 +1,7 @@
 package com.example.wspoc.backend
 
-import com.example.wspoc.backend.testing.TestKeys
-import com.example.wspoc.backend.testing.WsTestClient
+import com.example.wspoc.wscore.testing.TestKeys
+import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.extension.ExtendWith
