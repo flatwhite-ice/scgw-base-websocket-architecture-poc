@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.access-log.enabled=true"],
+    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "ws.access-log.enabled=true"],
 )
 @Import(TestAuthConfig::class)
 @ExtendWith(OutputCaptureExtension::class)

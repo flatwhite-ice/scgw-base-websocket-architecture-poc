@@ -78,7 +78,12 @@
   - 웹서버 graceful shutdown(phase `DEFAULT_PHASE-1024`)보다 **먼저** stop된다.
   - 신규 핸드셰이크는 503으로 거절하고, 기존 세션은 window 안의 랜덤 지터 시점에 1001로 닫는다.
   - `spring.lifecycle.timeout-per-shutdown-phase`(35초)는 drain window(20초)보다 크게 잡았다.
-- **실행 프로필:** `relay`(gateway 모드, 8081), `direct`(self 모드, 8083, JWKS=auth-api).
+- **실행 프로필**
+  - 기본값(프로필 없음): self 모드, 8081, JWKS=`http://localhost:8080/.well-known/jwks.json`
+  - `relay`: gateway 모드, 8081
+  - `direct`: self 모드, 8083. relay 인스턴스와 같은 머신에서 함께 띄우기 위한 프로필이다.
+  - JWKS 빈은 `self` 모드이고 URI가 비어 있지 않을 때만 만든다. relay에서는 JWKS 갱신 루프가 돌지 않는다.
+  - 처음에는 JWKS URI를 `direct` 프로필에만 넣었다. 그래서 프로필 없이 기동하면 `ws.auth.mode=self requires ws.auth.jwks-uri`로 실패했다. 지금은 `StartupConfigTest`가 프로필 없음, direct, relay 세 가지 기동을 회귀 검증한다.
 
 ## D9. close 프레임 유실 (1006) 원인과 수정 (M2)
 

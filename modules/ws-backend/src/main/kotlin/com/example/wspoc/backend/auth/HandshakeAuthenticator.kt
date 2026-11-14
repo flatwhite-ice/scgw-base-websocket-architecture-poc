@@ -20,7 +20,8 @@ class HandshakeAuthenticator(
 ) {
     init {
         check(props.auth.mode != AuthMode.SELF || verifier.ifAvailable != null) {
-            "ws.auth.mode=self requires ws.auth.jwks-uri (or a KeySource bean)"
+            "ws.auth.mode=self requires a non-blank ws.auth.jwks-uri (or a KeySource bean). " +
+                "Use the default config / 'direct' profile, or the 'relay' profile for gateway mode."
         }
     }
 

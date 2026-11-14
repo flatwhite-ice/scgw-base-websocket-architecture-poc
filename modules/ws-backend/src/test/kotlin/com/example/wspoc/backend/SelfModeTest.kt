@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self"],
+    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
 )
 @org.springframework.context.annotation.Import(TestAuthConfig::class)
 class SelfModeTest(

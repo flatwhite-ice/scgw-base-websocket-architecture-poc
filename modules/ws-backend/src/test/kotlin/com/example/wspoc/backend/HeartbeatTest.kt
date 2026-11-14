@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.heartbeat.interval=200ms", "ws.heartbeat.max-missed=2"],
+    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "ws.heartbeat.interval=200ms", "ws.heartbeat.max-missed=2"],
 )
 @Import(TestAuthConfig::class)
 class HeartbeatTest(

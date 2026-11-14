@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.drain.window=500ms"],
+    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "ws.drain.window=500ms"],
 )
 @Import(TestAuthConfig::class)
 @DirtiesContext

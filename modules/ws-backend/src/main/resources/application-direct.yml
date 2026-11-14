@@ -1,7 +1,7 @@
-# Direct (architecture B): clients connect here and the backend verifies the JWT itself.
+# Direct (architecture B): clients connect here and the backend verifies the JWT itself (JWKS from the default config).
+# Port 8083 so it can run next to a `relay` instance on 8081.
 server:
   port: 8083
 ws:
   auth:
     mode: self
-    jwks-uri: http://localhost:8080/.well-known/jwks.json

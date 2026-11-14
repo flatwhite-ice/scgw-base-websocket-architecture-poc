@@ -8,8 +8,12 @@ server:
   port: 8081
   shutdown: graceful
 
-# Run with a profile: `relay` (behind ws-gateway) or `direct` (self-authenticating).
+# Defaults = direct (self-authenticating) mode against a local auth-api, so the app starts without a profile.
+# Profiles: `relay` (behind ws-gateway, trusts its headers, :8081) / `direct` (self mode on :8083, next to relay).
 ws:
+  auth:
+    mode: self
+    jwks-uri: http://localhost:8080/.well-known/jwks.json
   heartbeat:
     interval: 30s
     max-missed: 2

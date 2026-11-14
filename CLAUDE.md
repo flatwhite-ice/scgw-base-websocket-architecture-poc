@@ -29,7 +29,7 @@ Stack: JDK 25 (Temurin, installed at `~/Library/Java/JavaVirtualMachines/temurin
 java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083   # JDK-only E2E smoke
 ```
 
-ws-backend needs a profile. Without one, self mode has no JWKS URI and startup fails fast.
+Without a profile, ws-backend starts in self (direct) mode on :8081 with JWKS from the local auth-api. The JWKS bean only exists in self mode with a non-blank URI, so `relay` runs no refresh loop.
 
 ## Architecture
 
