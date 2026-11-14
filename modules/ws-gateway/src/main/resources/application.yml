@@ -1,5 +1,38 @@
 spring:
   application:
     name: ws-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            # Upstream (gateway -> ws-backend) Reactor Netty client tuning.
+            connect-timeout: 2000
+            response-timeout: 10s
+            pool:
+              max-connections: 50000
+              acquire-timeout: 5000
+            websocket:
+              max-frame-payload-length: 65536
+    loadbalancer:
+      eager-load:
+        # Create the per-service LoadBalancer child context at startup. Otherwise it is built lazily on the
+        # first request, on a Netty event loop (class-file parsing; flagged by BlockHound) — a first-handshake stall.
+        clients: ws-backend
+    discovery:
+      client:
+        simple:
+          instances:
+            ws-backend:
+              - uri: http://localhost:8081
 server:
   port: 8082
+  shutdown: graceful
+
+ws:
+  gateway:
+    backend:
+      mode: discovery
+      service-id: ws-backend
+    auth:
+      jwks-uri: http://localhost:8080/.well-known/jwks.json
