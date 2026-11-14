@@ -47,6 +47,7 @@ class SelfModeTest(
             assertEquals("hello", reply["payload"].asString())
             assertEquals("alice", reply["userId"].asString())
             assertTrue(reply["srvTs"].asLong() > 0)
+            assertTrue(reply["server"].asString().matches(Regex("ws-backend@.+:$port")), "server=${reply["server"]}")
             conn.close()
         }
 
@@ -118,6 +119,7 @@ class SelfModeTest(
             assertEquals("push", first["type"].asString())
             assertEquals("ticker", first["topic"].asString())
             assertEquals(256, first["payload"].asString().length)
+            assertTrue(first["server"].asString().endsWith(":$port"), "server=${first["server"]}")
 
             conn.sendJson("type" to "subscribe", "topic" to "fast", "intervalMs" to 50, "payloadBytes" to 32)
             val fast = generateSequence { runBlocking { conn.nextJson() } }.first { it["topic"].asString() == "fast" }
@@ -154,7 +156,9 @@ class SelfModeTest(
             val conn = client.connect(ws("/ws/echo", "?ticket=${TestKeys.ticket("hank")}"))
 
             conn.send("{not json")
-            assertEquals("invalid json", conn.nextJson()["reason"].asString())
+            val invalid = conn.nextJson()
+            assertEquals("invalid json", invalid["reason"].asString())
+            assertTrue(invalid["server"].asString().endsWith(":$port"))
             conn.sendJson("type" to "nope")
             assertEquals("unknown type", conn.nextJson()["reason"].asString())
             conn.sendJson("type" to "echo", "id" to "still-open")

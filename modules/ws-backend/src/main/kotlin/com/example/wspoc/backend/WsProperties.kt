@@ -12,6 +12,8 @@ data class WsProperties(
     val drain: Drain = Drain(),
     val push: Push = Push(),
     val maxFramePayload: DataSize = DataSize.ofKilobytes(64),
+    /** Overrides the `server` field in outbound messages (default `<app>@<host>:<port>`). */
+    val instanceId: String? = null,
     /** Per-session outbound queue. When full, push messages are dropped (and counted) instead of buffering without bound. */
     val outboundBufferSize: Int = 256,
 ) {

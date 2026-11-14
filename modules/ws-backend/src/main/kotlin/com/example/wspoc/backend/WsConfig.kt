@@ -4,6 +4,7 @@ import com.example.wspoc.auth.common.JwksKeySource
 import com.example.wspoc.auth.common.JwtVerifier
 import com.example.wspoc.auth.common.KeySource
 import com.example.wspoc.auth.common.TicketReplayGuard
+import com.example.wspoc.backend.session.ServerIdentity
 import com.example.wspoc.backend.session.SessionRegistry
 import com.example.wspoc.backend.session.SessionScope
 import com.example.wspoc.backend.session.WsSessionHandler
@@ -34,7 +35,8 @@ class WsConfig {
         registry: SessionRegistry,
         scope: SessionScope,
         jsonMapper: JsonMapper,
-    ) = WsSessionHandler(props, registry, scope, jsonMapper, autoSubscribe = false)
+        serverIdentity: ServerIdentity,
+    ) = WsSessionHandler(props, registry, scope, jsonMapper, serverIdentity, autoSubscribe = false)
 
     @Bean
     fun pushHandler(
@@ -42,7 +44,8 @@ class WsConfig {
         registry: SessionRegistry,
         scope: SessionScope,
         jsonMapper: JsonMapper,
-    ) = WsSessionHandler(props, registry, scope, jsonMapper, autoSubscribe = true)
+        serverIdentity: ServerIdentity,
+    ) = WsSessionHandler(props, registry, scope, jsonMapper, serverIdentity, autoSubscribe = true)
 
     @Bean
     fun wsHandlerMapping(

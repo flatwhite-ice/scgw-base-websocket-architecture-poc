@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLong
  * interop is at this boundary (receive -> Flow, Channel -> send Flux, close Mono).
  *
  * Protocol (JSON text frames):
- *  - `{"type":"echo",...}`      -> same object + `srvTs` (+ `userId` of the authenticated principal)
+ *  - `{"type":"echo",...}`      -> same object + `srvTs`, `userId` (authenticated principal), `server` (this instance)
  *  - `{"type":"subscribe","topic":"ticker","intervalMs":1000,"payloadBytes":256}` -> periodic `push` messages
  *  - `{"type":"unsubscribe"}`  -> stop pushing
  */
@@ -48,6 +48,7 @@ class WsSessionHandler(
     private val registry: SessionRegistry,
     private val sessionScope: SessionScope,
     private val jsonMapper: JsonMapper,
+    private val serverIdentity: ServerIdentity,
     /** `/ws/push` starts the default subscription on connect; `/ws/echo` waits for an explicit subscribe. */
     private val autoSubscribe: Boolean,
     private val clock: Clock = Clock.systemUTC(),
@@ -148,6 +149,7 @@ class WsSessionHandler(
                 "echo" -> {
                     node.put("srvTs", clock.millis())
                     node.put("userId", principal.userId)
+                    node.put("server", serverIdentity.id)
                     reply(node)
                 }
 
@@ -174,7 +176,12 @@ class WsSessionHandler(
             }
         }
 
-        private fun error(reason: String): ObjectNode = jsonMapper.createObjectNode().put("type", "error").put("reason", reason)
+        private fun error(reason: String): ObjectNode =
+            jsonMapper
+                .createObjectNode()
+                .put("type", "error")
+                .put("reason", reason)
+                .put("server", serverIdentity.id)
 
         private fun startPush(
             scope: CoroutineScope,
@@ -196,6 +203,7 @@ class WsSessionHandler(
                                 .put("topic", topic)
                                 .put("seq", seq)
                                 .put("srvTs", clock.millis())
+                                .put("server", serverIdentity.id)
                                 .put("payload", payload)
                         val sent = outbound.trySend(session.textMessage(jsonMapper.writeValueAsString(message)))
                         if (sent.isClosed) return@launch

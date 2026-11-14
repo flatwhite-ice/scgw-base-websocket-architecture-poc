@@ -64,6 +64,8 @@ class GatewayE2ETest(
             assertEquals("e1", reply["id"].asString())
             assertEquals("via-gateway", reply["payload"].asString())
             assertEquals("alice", reply["userId"].asString())
+            // The response names the backend instance that served it, not the gateway.
+            assertTrue(reply["server"].asString().endsWith(":${RelayBackend.port}"), "server=${reply["server"]}")
             val seen = RelayBackend.seen.single()
             assertEquals("alice", seen.headers.getFirst(GatewayHeaders.USER_ID))
             assertFalse(

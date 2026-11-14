@@ -129,3 +129,14 @@
 - **남은 위험:** Spring의 500 에러 로그(`AbstractErrorWebExceptionHandler`)는 요청 URI를 쿼리까지 출력한다. 개발 중 500이 났을 때 실제로 원문 티켓이 찍혔다.
   - 티켓은 30초 만료에 1회용이라 영향이 작다.
   - 완전히 막으려면 에러 핸들러를 커스터마이즈해야 한다. 이 작업은 후속 과제로 남긴다.
+
+## D12. 응답에 처리 서버 표시 (`server` 필드)
+
+- backend가 보내는 모든 메시지(echo, push, error)에 `server` 필드를 넣는다. 형식은 `<spring.application.name>@<host>:<실제 바인딩 포트>`이고, `ws.instance-id`로 덮어쓸 수 있다.
+  - 이 값으로 relay 경유 시 어느 backend가 처리했는지, 로드밸런싱이 어떻게 분배됐는지 확인한다.
+  - 실제로 backend 2대에서 라운드로빈 분배를 확인했다.
+- 호스트 결정 순서: `HOSTNAME`(K8s 파드 이름) → `InetAddress.getLocalHost()`
+  - 후자는 DNS 조회로 블로킹될 수 있다. 그래서 빈 생성 시점(main 스레드)에 한 번만 계산한다.
+  - 포트는 `WebServerInitializedEvent`에서 받는다. 랜덤 포트(테스트)에서도 실제 값이 들어간다.
+- gateway는 응답에 자기 정보를 넣지 않는다. 프레임을 파싱하고 수정하면 relay 홉의 비용이 늘어서, 측정하려는 대상(H5)이 왜곡된다.
+- 비용: push 메시지 크기가 약 40B 늘어난다. E2에서는 payloadBytes(256B) 외의 오버헤드로 감안한다.

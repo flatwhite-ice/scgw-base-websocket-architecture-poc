@@ -59,18 +59,38 @@ websocat "ws://localhost:8082/ws/echo?ticket=$TICKET"
 
 ```json
 {"type":"echo","id":"1","ts":0,"payload":"hello"}
-{"type":"subscribe","topic":"ticker","intervalMs":1000,"payloadBytes":16}
+{"type":"subscribe","topic":"ticker","intervalMs":2000,"payloadBytes":16}
 {"type":"unsubscribe"}
 ```
 
 | 메시지 | 서버 동작 |
 |---|---|
-| `echo` | 보낸 JSON에 `srvTs`(서버 수신 시각)와 `userId`를 붙여 그대로 돌려준다 |
+| `echo` | 보낸 JSON에 `srvTs`(서버 수신 시각), `userId`, `server`를 붙여 그대로 돌려준다 |
 | `subscribe` | `intervalMs` 주기로 `payloadBytes` 크기의 `push` 메시지를 보낸다 |
 | `unsubscribe` | push를 멈춘다 |
 | 잘못된 JSON 또는 모르는 type | `{"type":"error","reason":...}`로 응답하고 연결은 유지한다 |
 
 `/ws/push`로 연결하면 접속 즉시 기본 구독이 시작된다(`ticker`, 1초, 256B).
+
+### 응답의 `server` 필드: 어느 backend가 처리했나
+
+모든 서버 메시지(echo, push, error)에는 그 메시지를 보낸 **backend 인스턴스**가 `server` 필드로 들어 있다.
+
+- 형식은 `<앱 이름>@<호스트>:<실제 포트>`이다. 예: `ws-backend@flatwhite-mbp.local:8081`
+  - K8s에서는 `HOSTNAME`(파드 이름)이 호스트 자리에 들어간다.
+  - `ws.instance-id` 설정으로 직접 지정할 수도 있다.
+- gateway를 거쳐도 backend 값이 찍힌다. gateway는 프레임을 수정하지 않고 그대로 중계한다.
+- backend를 여러 대 두면 gateway의 로드밸런싱 결과를 이 값으로 확인할 수 있다. 아래는 backend 2대(18081, 18091) 뒤에서 확인한 실제 출력이다.
+
+```text
+{"type":"echo","id":"1",...,"userId":"u1","server":"ws-backend@flatwhite-mbp.local:18081"}
+{"type":"echo","id":"2",...,"userId":"u1","server":"ws-backend@flatwhite-mbp.local:18091"}
+{"type":"echo","id":"3",...,"userId":"u1","server":"ws-backend@flatwhite-mbp.local:18081"}
+{"type":"push","topic":"ticker","seq":0,"srvTs":...,"server":"ws-backend@flatwhite-mbp.local:18081","payload":"xxxxxxxxxxxxxxxx"}
+{"type":"error","reason":"invalid json","server":"ws-backend@flatwhite-mbp.local:18091"}
+```
+
+연결이 처리되는 backend는 연결 시점에 정해진다. 같은 연결에서 오는 메시지는 모두 같은 `server` 값을 가진다.
 
 > **주의:** websocat 1.x의 `-H`는 값을 여러 개 받는 옵션이라, `-H` 뒤에 URL을 쓰면 URL까지 헤더로 먹는다.
 > 그 결과 `No URL specified` 오류가 난다. **URL을 먼저 쓰고 `-H`를 뒤에** 두거나, `--header="Authorization: Bearer $TOKEN"` 형식을 쓴다.
@@ -85,17 +105,17 @@ websocat "ws://localhost:8082/ws/echo?ticket=$TICKET"
 # echo (Bearer)
 echo '{"type":"echo","id":"1","ts":0,"payload":"hello"}' \
   | websocat -n -1 ws://localhost:8082/ws/echo -H "Authorization: Bearer $TOKEN"
-# → {"type":"echo","id":"1","ts":0,"payload":"hello","srvTs":...,"userId":"u1"}
+# → {"type":"echo","id":"1","ts":0,"payload":"hello","srvTs":...,"userId":"u1","server":"ws-backend@<host>:8081"}
 
 # echo (티켓)
 TICKET=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "authorization: Bearer $TOKEN" | jq -r .ticket)
 echo '{"type":"echo","id":"2","payload":"via-ticket"}' \
   | websocat -n -1 "ws://localhost:8082/ws/echo?ticket=$TICKET"
-# → {"type":"echo","id":"2","payload":"via-ticket","srvTs":...,"userId":"u1"}
+# → {"type":"echo","id":"2","payload":"via-ticket","srvTs":...,"userId":"u1","server":"ws-backend@<host>:8081"}
 
 # push 수신: stdin을 열어 둔 채 몇 개만 받기
 sleep 3 | websocat ws://localhost:8082/ws/push -H "Authorization: Bearer $TOKEN" | head -2
-# → {"type":"push","topic":"ticker","seq":0,...}
+# → {"type":"push","topic":"ticker","seq":0,...,"server":"ws-backend@<host>:8081",...}
 #   {"type":"push","topic":"ticker","seq":1,...}
 
 # subscribe 파라미터 변경 후 스트림 받기
@@ -121,7 +141,7 @@ websocat -1 ws://localhost:8082/ws/echo </dev/null
 TICKET=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "authorization: Bearer $TOKEN" | jq -r .ticket)
 echo '{"type":"echo","id":"spoof"}' \
   | websocat -n -1 "ws://localhost:8082/ws/echo?ticket=$TICKET" -H "X-User-Id: evil"
-# → {"type":"echo","id":"spoof",...,"userId":"u1"}
+# → {"type":"echo","id":"spoof",...,"userId":"u1","server":"ws-backend@<host>:8081"}
 ```
 
 ### 4.3 curl로 업그레이드 전 401 확인
