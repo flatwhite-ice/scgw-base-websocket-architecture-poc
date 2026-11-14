@@ -79,10 +79,14 @@
 - 실제 프로세스: gateway를 거친 클라이언트가 backend drain 때 1001을 받는 것을 raw 소켓으로 확인했다.
 - 1014 확인 결과: relay에서 backend를 SIGKILL하면 클라이언트는 코드 없는 close 프레임을 받는다. SCG는 1014를 생성하지 않는다(D14).
 
+### gateway drain 구현 (2026-11-15)
+- `GatewayDrainCoordinator`를 추가했다. shutdown 시 신규 업그레이드는 503, relay 세션은 window 안에서 지터를 두고 1001로 닫는다. 세션 추적은 SCG `WebSocketService` 데코레이터로 한다(decisions D10).
+- `GatewayDrainTest`를 추가했다. `./gradlew build` 통과(20 suites, 실패 0), gateway 테스트 8회 반복에서 실패 0
+- 실제 프로세스: 게이트웨이에 SIGTERM을 보내자 클라이언트 2개가 지터 시점에 1001을 받았고, backend 세션도 정리됐다.
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
-- gateway drain 시 relay 세션별로 1001과 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
 - 500 에러 로그에 요청 URI의 `ticket`이 그대로 남는 문제 해결. 에러 핸들러 커스터마이즈가 필요하다(decisions D11).
 - M5: relay backend의 ingress를 ws-gateway로만 제한하는 NetworkPolicy. gateway 모드는 헤더를 신뢰하기 때문이다(decisions D8).
 - K8s 파드 IP 디스커버리(Spring Cloud Kubernetes 또는 headless Service)는 M5에서 붙인다.

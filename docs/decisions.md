@@ -114,9 +114,15 @@
 - **LoadBalancer eager-load:** `spring.cloud.loadbalancer.eager-load.clients=ws-backend`
   - Spring Cloud LoadBalancer는 서비스별 child ApplicationContext를 **첫 요청 때 event loop에서** 만들고, 이때 class 파일을 파싱한다.
   - BlockHound가 이 호출을 잡았다. 첫 핸드셰이크 지연의 원인이기도 해서, 기동 시점에 미리 만들도록 바꿨다.
-- **Drain:** `GatewayDrainState`가 shutdown 시 신규 업그레이드를 503으로 거절한다.
-  - 기존 relay 세션은 SCG `WebsocketRoutingFilter`가 소유하므로, 세션별 1012 + 지터 종료는 구현하지 않았다. 웹서버 종료 시 연결이 닫힌다.
-  - E4에서 게이트웨이 종료 시 클라이언트가 받는 close 코드를 관찰하고, 필요하면 후속 과제로 처리한다.
+- **Drain:** `GatewayDrainCoordinator`(SmartLifecycle, phase=`DEFAULT_PHASE`)가 backend의 drain과 같은 방식으로 동작한다.
+  - 신규 업그레이드를 503으로 거절하고, relay 중인 클라이언트 세션을 `ws.gateway.drain.window`(20초) 안의 랜덤 지터 시점에 **1001**로 닫는다.
+  - **세션 추적:** SCG는 클라이언트 세션을 private `ProxyWebSocketHandler` 안에 두고, `WebSocketService` 빈에는 `@ConditionalOnMissingBean`이 없다.
+    - 그래서 빈을 교체하거나 필터를 복사하지 않고, BeanPostProcessor로 `WebSocketService`를 감싼다(`TrackingWebSocketService`).
+    - SCG가 넘기는 핸들러를 래핑해서 세션 시작 시 `RelaySessionRegistry`에 등록하고 종료 시 해제한다. subprotocol은 그대로 위임한다. relay 동작 자체는 바꾸지 않는다.
+  - **backend 정리:** 클라이언트 쪽만 닫으면 된다. SCG의 양방향 close 전파(D14)가 1001을 backend로 넘기고, 1001은 RFC 6455 코드라 변환되지 않는다.
+  - **검증:** `GatewayDrainTest`(클라이언트 3개 1001, drain 중 503, 게이트웨이와 backend 세션 0)와 8회 반복 실행(실패 0, close 프레임 해제 경고 0)
+  - **실측:** 실제 프로세스로 게이트웨이에 SIGTERM을 보냈다. 클라이언트 2개가 0.9초, 7.8초에 1001을 받았고, backend 세션도 전파로 정리됐다. 이어서 graceful shutdown이 완료됐다.
+  - `spring.lifecycle.timeout-per-shutdown-phase`는 35초로, drain window(20초)보다 크게 잡았다.
 - **SCG 설정 prefix:** `spring.cloud.gateway.server.webflux.httpclient.*`
   - 업스트림 커넥션 풀: `pool.max-connections`, `pool.acquire-timeout`
   - 연결/응답 타임아웃: `connect-timeout`, `response-timeout`

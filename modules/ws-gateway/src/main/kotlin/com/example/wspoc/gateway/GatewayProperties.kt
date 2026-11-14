@@ -8,6 +8,7 @@ import java.time.Duration
 data class GatewayProperties(
     val backend: Backend = Backend(),
     val auth: Auth = Auth(),
+    val drain: Drain = Drain(),
 ) {
     enum class BackendMode {
         /** `lb:ws://<service-id>` via Spring Cloud LoadBalancer: one upstream destination per backend pod IP. */
@@ -21,6 +22,11 @@ data class GatewayProperties(
         val mode: BackendMode = BackendMode.DISCOVERY,
         val serviceId: String = "ws-backend",
         val uri: URI = URI.create("ws://localhost:8081"),
+    )
+
+    data class Drain(
+        /** Relayed sessions are closed with 1001 at random points inside this window on shutdown. */
+        val window: Duration = Duration.ofSeconds(20),
     )
 
     data class Auth(

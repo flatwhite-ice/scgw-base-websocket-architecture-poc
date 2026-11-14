@@ -182,7 +182,7 @@ java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localho
 |---|---|---|---|
 | 3000 | §7.4.2 애플리케이션 범위 (IANA 이름 Unauthorized) | 토큰 만료. access token 만료 시각에 닫힌다. 티켓으로 연결해도 원래 access token 기준이다 | 토큰을 재발급한 뒤 재연결 |
 | 3008 | §7.4.2 애플리케이션 범위 (IANA 이름 Timeout) | heartbeat 타임아웃. 서버 ping에 pong이 연속 2회 없으면 닫힌다. websocat은 pong을 자동으로 보내므로 유지된다 | 재연결 |
-| 1001 | §7.4.1 Going Away | 서버 종료/배포(drain). SIGTERM 후 20초 window 안에 지터를 두고 닫힌다 | 백오프와 지터를 두고 재연결 |
+| 1001 | §7.4.1 Going Away | 서버 종료/배포(drain). backend나 gateway에 SIGTERM이 오면 20초 window 안에 지터를 두고 닫힌다 | 백오프와 지터를 두고 재연결 |
 
 relay 경로에서 backend가 비정상 종료되면(프로세스 강제 종료 등), 클라이언트는 코드 없는 close 프레임(1005)을 받는다. direct 경로에서는 같은 상황이 close 프레임 없는 연결 끊김(1006)으로 보인다.
 

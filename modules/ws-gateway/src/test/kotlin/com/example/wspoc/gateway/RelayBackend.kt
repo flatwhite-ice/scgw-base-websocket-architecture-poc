@@ -41,6 +41,8 @@ object RelayBackend {
 
     val port: Int get() = requireNotNull((context as WebServerApplicationContext).webServer).port
 
+    fun <T : Any> bean(type: Class<T>): T = context.getBean(type)
+
     /** @TestConfiguration keeps it out of the gateway context's component scan (same package). */
     @TestConfiguration(proxyBeanMethods = false)
     class RecorderConfig {

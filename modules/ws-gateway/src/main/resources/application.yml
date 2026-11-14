@@ -1,6 +1,9 @@
 spring:
   application:
     name: ws-gateway
+  lifecycle:
+    # Must exceed ws.gateway.drain.window (+ close grace) so the drain phase is not cut short.
+    timeout-per-shutdown-phase: 35s
   cloud:
     gateway:
       server:
@@ -36,3 +39,5 @@ ws:
       service-id: ws-backend
     auth:
       jwks-uri: http://localhost:8080/.well-known/jwks.json
+    drain:
+      window: 20s

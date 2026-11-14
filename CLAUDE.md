@@ -57,6 +57,7 @@ ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway'
 - **ws-gateway**:
   - `WsAuthFilter` (GlobalFilter, highest precedence) always strips client identity headers. It authenticates upgrades only, injects headers, removes `ticket` and `Authorization`, and on a 401 never calls the chain, so no upstream connection is opened.
   - Routes come from `ws.gateway.backend.mode`: `discovery` (`lb:ws://ws-backend`) or `static` (single URI, for experiment E3).
+  - `GatewayDrainCoordinator` closes relayed sessions with 1001 plus jitter on shutdown. SCG keeps sessions private, so `RelaySessionTracking` wraps the `WebSocketService` bean (BeanPostProcessor) to register them; SCG's own filter is left untouched.
 
 ## Rules and gotchas
 
