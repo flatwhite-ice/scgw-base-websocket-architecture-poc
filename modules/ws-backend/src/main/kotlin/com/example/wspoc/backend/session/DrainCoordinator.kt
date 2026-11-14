@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
 import kotlin.random.Random
 
 /**
- * Graceful drain on shutdown: stop accepting handshakes, then close every session with 1001 at a random
+ * Graceful drain on shutdown: stop accepting handshakes, then close every session with 1012 (Service Restart) at a random
  * point inside `ws.drain.window` so clients do not all reconnect at the same instant.
  *
  * Runs at the highest lifecycle phase, i.e. it is stopped *before* Boot's web server graceful shutdown
@@ -52,7 +52,7 @@ class DrainCoordinator(
                 sessions.values.forEach { handle ->
                     launch {
                         delay(Random.nextLong(window.toMillis().coerceAtLeast(1)))
-                        handle.closeAsync(CloseCodes.GOING_AWAY)
+                        handle.closeAsync(CloseCodes.SERVICE_RESTART)
                     }
                 }
                 // Wait for the jittered closes plus a short grace for close handshakes to finish.

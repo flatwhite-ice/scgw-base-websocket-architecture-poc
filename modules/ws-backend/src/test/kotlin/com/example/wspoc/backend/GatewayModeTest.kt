@@ -51,10 +51,10 @@ class GatewayModeTest(
         }
 
     @Test
-    fun `closes with 4401 at X-Auth-Exp`() =
+    fun `closes with 3000 at X-Auth-Exp`() =
         runBlocking {
             val conn = client.connect(uri, gatewayHeaders("u", Instant.now().plusSeconds(2)))
 
-            assertEquals(4401, conn.awaitClose(Duration.ofSeconds(5)).code)
+            assertEquals(3000, conn.awaitClose(Duration.ofSeconds(5)).code)
         }
 }

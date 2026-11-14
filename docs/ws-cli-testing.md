@@ -176,10 +176,14 @@ java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localho
 
 ## 7. 참고: 서버가 연결을 닫는 경우
 
-| close code | 의미 |
-|---|---|
-| 4401 | 토큰 만료. access token 만료 시각에 닫힌다. 티켓으로 연결해도 원래 access token 기준이다 |
-| 4408 | heartbeat 타임아웃. 서버 ping에 pong이 연속 2회 없으면 닫힌다. websocat은 pong을 자동으로 보내므로 유지된다 |
-| 1001 | 서버 종료(drain). SIGTERM 후 20초 window 안에 지터를 두고 닫힌다 |
+모두 IANA WebSocket Close Code 레지스트리에 등록된 코드다.
+
+| close code | IANA 이름 | 의미 | 클라이언트 권장 동작 |
+|---|---|---|---|
+| 3000 | Unauthorized | 토큰 만료. access token 만료 시각에 닫힌다. 티켓으로 연결해도 원래 access token 기준이다 | 토큰을 재발급한 뒤 재연결 |
+| 3008 | Timeout | heartbeat 타임아웃. 서버 ping에 pong이 연속 2회 없으면 닫힌다. websocat은 pong을 자동으로 보내므로 유지된다 | 재연결 |
+| 1012 | Service Restart | 서버 종료/배포(drain). SIGTERM 후 20초 window 안에 지터를 두고 닫힌다 | 백오프와 지터를 두고 재연결 |
+
+핸드셰이크 인증 실패는 close code가 아니라 업그레이드 전에 HTTP 401로 응답한다.
 
 이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `GatewayE2ETest`). websocat 화면에서 close code를 확인하는 방법은 따로 검증하지 않았다.

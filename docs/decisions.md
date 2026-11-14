@@ -56,15 +56,15 @@
 
 ## D7. 티켓 세션의 만료 시각 = access token 만료 (M2)
 
-- 티켓의 `exp`(30초)는 **교환 가능 기간**일 뿐이다. 이 값을 세션 만료로 쓰면 티켓으로 연결한 모든 세션이 30초 뒤에 4401로 끊긴다.
-- **결정:** auth-api가 티켓을 발급할 때 원래 access token의 만료 시각을 `sexp` 클레임에 담는다. `JwtVerifier`는 티켓 검증 시 `AuthPrincipal.expiresAt = sexp`로 설정한다. 그래서 ticket으로 연결하든 Bearer로 연결하든 세션은 access token 만료 시각에 4401로 종료된다.
+- 티켓의 `exp`(30초)는 **교환 가능 기간**일 뿐이다. 이 값을 세션 만료로 쓰면 티켓으로 연결한 모든 세션이 30초 뒤에 토큰 만료 코드로 끊긴다.
+- **결정:** auth-api가 티켓을 발급할 때 원래 access token의 만료 시각을 `sexp` 클레임에 담는다. `JwtVerifier`는 티켓 검증 시 `AuthPrincipal.expiresAt = sexp`로 설정한다. 그래서 ticket으로 연결하든 Bearer로 연결하든 세션은 access token 만료 시각에 3000(D13)으로 종료된다.
 - JWT `exp`는 초 단위이므로 `IssuedToken.expiresAt`도 초 단위로 절삭해 claim 값과 일치시켰다.
 
 ## D8. 세션 처리 구조 (M2)
 
 - **핸드셰이크 인증:** `CoWebFilter`(`WsHandshakeAuthFilter`)가 업그레이드 전에 401 또는 503을 응답하고 chain을 호출하지 않는다. 인증 결과는 `exchange.mutate().principal(...)`로 넘기고, 핸들러는 `HandshakeInfo.principal`로 받는다.
   - `HandshakeWebSocketService`의 attribute predicate는 *WebSession* 속성만 복사한다. 이 경로를 쓰면 연결마다 세션 스토어 항목이 생기므로 쓰지 않는다.
-- **relay 모드 헤더:** `X-User-Id`, `X-Scopes`, `X-Auth-Exp`(epoch seconds). `X-Auth-Exp`는 스펙에 없지만 relay 모드에서도 4401을 처리하려면 필요해서 추가했다.
+- **relay 모드 헤더:** `X-User-Id`, `X-Scopes`, `X-Auth-Exp`(epoch seconds). `X-Auth-Exp`는 스펙에 없지만 relay 모드에서도 토큰 만료 종료(3000)를 처리하려면 필요해서 추가했다.
 - **세션 코루틴 dispatcher:** `Schedulers.parallel().asCoroutineDispatcher()`
   - `delay()`가 kotlinx의 단일 DefaultExecutor 스레드 대신 Reactor 타이머(코어 수만큼)를 쓴다. 2만 세션 × 1초 push에서 타이머 스레드 하나가 병목이 되는 것을 피하기 위해서다.
   - parallel 스레드는 non-blocking 스레드라 BlockHound 검사 대상이다.
@@ -72,11 +72,11 @@
   - push는 `trySend`로 보내고, 큐가 가득 차면 드롭하고 `droppedPushMessages`에 집계한다(E2의 "드롭 여부").
   - echo 응답은 `send`로 보내 수신 루프에 backpressure를 건다.
 - **inbound:** `receive().map(...)`에서 텍스트를 동기적으로 추출한 뒤 Flow로 넘긴다. Reactor Netty는 `onNext` 직후 프레임 버퍼를 해제하기 때문이다.
-- **heartbeat:** `ws.heartbeat.interval`마다 ping을 보내고, pong 없이 연속 `max-missed`(2)회가 되면 **4408**(heartbeat timeout, PoC에서 정한 코드)로 종료한다.
+- **heartbeat:** `ws.heartbeat.interval`마다 ping을 보내고, pong 없이 연속 `max-missed`(2)회가 되면 **3008 Timeout**으로 종료한다(D13).
   - 서버 업그레이드는 `handlePing(false)`로 설정해 PONG 프레임이 세션까지 전달되게 했다.
 - **drain:** `DrainCoordinator`(SmartLifecycle, phase=`DEFAULT_PHASE`)를 둔다.
   - 웹서버 graceful shutdown(phase `DEFAULT_PHASE-1024`)보다 **먼저** stop된다.
-  - 신규 핸드셰이크는 503으로 거절하고, 기존 세션은 window 안의 랜덤 지터 시점에 1001로 닫는다.
+  - 신규 핸드셰이크는 503으로 거절하고, 기존 세션은 window 안의 랜덤 지터 시점에 1012 Service Restart로 닫는다(D13).
   - `spring.lifecycle.timeout-per-shutdown-phase`(35초)는 drain window(20초)보다 크게 잡았다.
 - **실행 프로필**
   - 기본값(프로필 없음) = **relay**: gateway 모드, 8081. 게이트웨이의 기본 라우팅 대상(`localhost:8081`)과 맞물리고 JWKS가 필요 없다. `relay` 프로필은 명시용이며 기본값과 같다.
@@ -90,7 +90,7 @@
 
 ## D9. close 프레임 유실 (1006) 원인과 수정 (M2)
 
-- **증상:** 전체 스위트를 반복 실행하면 약 1/14 확률로 클라이언트가 1001/4401/4408 대신 **1006**(close 프레임 없이 끊김)을 받았다. 이때 서버에는 `Failed to release a message: CloseWebSocketFrame(...freed)` 경고가 남았다.
+- **증상:** 전체 스위트를 반복 실행하면 약 1/14 확률로 클라이언트가 의도한 close code(당시 1001/4401/4408, 현재 1012/3000/3008) 대신 **1006**(close 프레임 없이 끊김)을 받았다. 이때 서버에는 `Failed to release a message: CloseWebSocketFrame(...freed)` 경고가 남았다.
 - **원인:** Reactor Netty의 `sendClose()`는 inbound를 즉시 종료하고, 구독이 취소되면(`doOnCancel`) close 프레임을 해제한다.
   1. 세션 코루틴에서 `session.close()`를 await한다.
   2. inbound가 끝나면서 수신 루프가 종료된다.
@@ -98,7 +98,7 @@
   4. 쓰기 중인 프레임이 해제된다.
 - **수정:** close 쓰기를 `withContext(NonCancellable)`로 감쌌다. 수정 후 전체 스위트를 16회 반복 실행했고 실패 0건, 경고 0건이었다.
   - 처음에는 "outbound를 먼저 비우고 close"로 고쳤는데 오히려 11/16 실패가 났다. 서스펜션 지점이 늘어나 취소 창이 넓어졌기 때문이며, 이 결과로 원인을 확정했다.
-- **실험 영향:** 이 버그가 남아 있었다면 E4(재연결 폭주)에서 drain 시 1001 대신 1006이 섞여, 클라이언트 재연결 정책 비교가 왜곡됐을 것이다.
+- **실험 영향:** 이 버그가 남아 있었다면 E4(재연결 폭주)에서 drain 시 의도한 코드 대신 1006이 섞여, 클라이언트 재연결 정책 비교가 왜곡됐을 것이다.
 
 ## D10. ws-gateway (M3)
 
@@ -115,7 +115,7 @@
   - Spring Cloud LoadBalancer는 서비스별 child ApplicationContext를 **첫 요청 때 event loop에서** 만들고, 이때 class 파일을 파싱한다.
   - BlockHound가 이 호출을 잡았다. 첫 핸드셰이크 지연의 원인이기도 해서, 기동 시점에 미리 만들도록 바꿨다.
 - **Drain:** `GatewayDrainState`가 shutdown 시 신규 업그레이드를 503으로 거절한다.
-  - 기존 relay 세션은 SCG `WebsocketRoutingFilter`가 소유하므로, 세션별 1001 + 지터 종료는 구현하지 않았다. 웹서버 종료 시 연결이 닫힌다.
+  - 기존 relay 세션은 SCG `WebsocketRoutingFilter`가 소유하므로, 세션별 1012 + 지터 종료는 구현하지 않았다. 웹서버 종료 시 연결이 닫힌다.
   - E4에서 게이트웨이 종료 시 클라이언트가 받는 close 코드를 관찰하고, 필요하면 후속 과제로 처리한다.
 - **SCG 설정 prefix:** `spring.cloud.gateway.server.webflux.httpclient.*`
   - 업스트림 커넥션 풀: `pool.max-connections`, `pool.acquire-timeout`
@@ -140,3 +140,22 @@
   - 포트는 `WebServerInitializedEvent`에서 받는다. 랜덤 포트(테스트)에서도 실제 값이 들어간다.
 - gateway는 응답에 자기 정보를 넣지 않는다. 프레임을 파싱하고 수정하면 relay 홉의 비용이 늘어서, 측정하려는 대상(H5)이 왜곡된다.
 - 비용: push 메시지 크기가 약 40B 늘어난다. E2에서는 payloadBytes(256B) 외의 오버헤드로 감안한다.
+
+## D13. close code를 IANA 등록 코드로 통일
+
+| 용도 | 이전 | 현재 | IANA 등록 정보 |
+|---|---|---|---|
+| 토큰 만료 | 4401 (private use) | **3000 Unauthorized** | 3000번대, First Come First Served, 2021-09-06 |
+| heartbeat 타임아웃 | 4408 (private use) | **3008 Timeout** | 3000번대, First Come First Served, 2024-02-01 |
+| drain(종료/배포) | 1001 Going Away | **1012 Service Restart** | 1000번대, 2025-07-30 갱신 |
+
+- 근거는 IANA WebSocket Close Code Number Registry(`https://www.iana.org/assignments/websocket/websocket.xml`, 2026-10-05 갱신본)를 직접 확인한 결과다.
+- **스펙 편차:** handoff §5.3은 토큰 만료 4401, drain 1001을 지정한다. 아래 이유로 사용자 결정에 따라 변경했다.
+- **이유**
+  - 4000–4999는 누구나 임의로 쓰는 private use 구간이다. 다른 WS 프로토콜과 같은 숫자가 다른 의미로 쓰일 수 있다. 예를 들어 graphql-ws의 4408은 "초기화 타임아웃"이다.
+  - 등록 코드는 레지스트리에 이름이 있어서 코드만 보고도 의미를 짐작할 수 있다.
+  - 이 시스템에서 핸드셰이크 인증 실패는 업그레이드 전 HTTP 401로 처리한다. 따라서 3000은 "세션 중 토큰 만료" 하나로만 쓰이고 의미가 모호하지 않다.
+  - 1012는 "재시작 중이니 다시 연결하라"는 뜻이라, 롤링 배포의 drain에는 1001(Going Away, 브라우저 이탈도 포함하는 범용 코드)보다 의도가 정확하다. E4의 재연결 정책도 이 코드를 기준으로 짠다.
+- **한계:** 3000과 3008은 개인이 등록한 코드이고 참조 문서가 없다. 의미 정의가 명확하지 않으므로, 클라이언트 동작은 여전히 우리가 문서화해야 한다(`docs/ws-cli-testing.md` §7).
+- **검증:** backend 테스트(Self, Gateway mode, Heartbeat, Drain)와 gateway E2E로 3000/3008/1012를 확인했다. backend가 보낸 3000이 SCG를 거쳐 클라이언트에 그대로 도달하는 것도 확인했다.
+- **추가 후보:** 1014(Bad Gateway)는 relay에서 backend가 비정상 종료됐을 때 gateway가 보낼 코드로 의미가 맞다. SCG가 현재 어떤 코드를 전달하는지는 E4에서 확인한다.

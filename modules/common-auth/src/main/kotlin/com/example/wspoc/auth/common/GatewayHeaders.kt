@@ -10,7 +10,7 @@ object GatewayHeaders {
     const val USER_ID = "X-User-Id"
     const val SCOPES = "X-Scopes"
 
-    /** Session expiry as epoch seconds, so the backend can close with 4401 in relay mode too. */
+    /** Session expiry as epoch seconds, so the backend can close with 3000 (token expired) in relay mode too. */
     const val AUTH_EXP = "X-Auth-Exp"
 
     val ALL = listOf(USER_ID, SCOPES, AUTH_EXP)

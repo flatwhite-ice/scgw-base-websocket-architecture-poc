@@ -50,9 +50,10 @@ ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway'
 - **ws-backend**: `WsHandshakeAuthFilter` rejects with 401, or 503 while draining, **before the upgrade**. It passes the principal on via `exchange.mutate().principal()`, and the handler reads `HandshakeInfo.principal`. `WsSessionHandler` runs each session as a coroutine:
   - the bounded outbound `Channel` drops push messages when full
   - echo/subscribe JSON protocol
-  - heartbeat closes with 4408
-  - token expiry closes with 4401
-  - `DrainCoordinator` (SmartLifecycle) closes sessions with 1001 plus jitter
+  - heartbeat timeout closes with 3008 (Timeout)
+  - token expiry closes with 3000 (Unauthorized)
+  - `DrainCoordinator` (SmartLifecycle) closes sessions with 1012 (Service Restart) plus jitter
+  - all close codes are IANA-registered and defined in `CloseCodes` (D13); don't introduce private 4xxx codes
 - **ws-gateway**:
   - `WsAuthFilter` (GlobalFilter, highest precedence) always strips client identity headers. It authenticates upgrades only, injects headers, removes `ticket` and `Authorization`, and on a 401 never calls the chain, so no upstream connection is opened.
   - Routes come from `ws.gateway.backend.mode`: `discovery` (`lb:ws://ws-backend`) or `static` (single URI, for experiment E3).

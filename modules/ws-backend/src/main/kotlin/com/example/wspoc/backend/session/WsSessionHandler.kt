@@ -242,7 +242,7 @@ class WsSessionHandler(
          * Sends the close frame. Must not be cancelled: Reactor Netty's `sendClose()` immediately ends the inbound
          * side, which completes [run] and cancels its children — including this coroutine. Cancelling the close
          * Mono mid-write makes Reactor Netty release the CloseWebSocketFrame before it is flushed, and the client
-         * sees 1006 instead of 1001/4401/4408 (docs/decisions.md D9).
+         * sees 1006 instead of 1012/3000/3008 (docs/decisions.md D9).
          */
         private suspend fun close(status: CloseStatus) {
             if (!closing.compareAndSet(false, true)) return

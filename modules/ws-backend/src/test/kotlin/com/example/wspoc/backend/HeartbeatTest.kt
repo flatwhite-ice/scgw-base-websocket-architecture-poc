@@ -38,13 +38,13 @@ class HeartbeatTest(
         }
 
     @Test
-    fun `client not answering pings is closed with 4408 after two missed pongs`() =
+    fun `client not answering pings is closed with 3008 Timeout after two missed pongs`() =
         runBlocking {
             val conn = WsTestClient(answerPings = false).connect(uri())
 
             val status = conn.awaitClose(Duration.ofSeconds(3))
 
-            assertEquals(4408, status.code)
+            assertEquals(3008, status.code)
             assertTrue(conn.pingsReceived.get() >= 2, "expected pings, got ${conn.pingsReceived.get()}")
         }
 }

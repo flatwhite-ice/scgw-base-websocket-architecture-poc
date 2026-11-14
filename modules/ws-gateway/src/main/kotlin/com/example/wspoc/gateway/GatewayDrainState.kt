@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * On shutdown, stop accepting new WebSocket upgrades (503) before the web server's graceful shutdown starts.
  * Relayed sessions are owned by Spring Cloud Gateway's WebsocketRoutingFilter and are not individually closed
- * with 1001 here; see docs/decisions.md D10.
+ * with 1012 here; see docs/decisions.md D10.
  */
 @Component
 class GatewayDrainState : SmartLifecycle {

@@ -174,11 +174,11 @@ class GatewayE2ETest(
         }
 
     @Test
-    fun `backend close code 4401 on token expiry reaches the client through the gateway`() =
+    fun `backend close code 3000 on token expiry reaches the client through the gateway`() =
         runBlocking {
             val conn = client.connect(gw("/ws/echo", "?ticket=${TestKeys.ticket("frank", sessionTtl = Duration.ofSeconds(2))}"))
 
-            assertEquals(4401, conn.awaitClose(Duration.ofSeconds(6)).code)
+            assertEquals(3000, conn.awaitClose(Duration.ofSeconds(6)).code)
         }
 
     @Test

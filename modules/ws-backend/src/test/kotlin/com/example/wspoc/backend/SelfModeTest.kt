@@ -132,14 +132,14 @@ class SelfModeTest(
         }
 
     @Test
-    fun `session is closed with 4401 when the token expires`() =
+    fun `session is closed with 3000 Unauthorized when the token expires`() =
         runBlocking {
             val headers = HttpHeaders().apply { setBearerAuth(TestKeys.accessToken("frank", Duration.ofSeconds(2))) }
             val conn = client.connect(ws("/ws/echo"), headers)
 
             val status = conn.awaitClose(Duration.ofSeconds(5))
 
-            assertEquals(4401, status.code)
+            assertEquals(3000, status.code)
         }
 
     @Test
@@ -147,7 +147,7 @@ class SelfModeTest(
         runBlocking {
             val conn = client.connect(ws("/ws/echo", "?ticket=${TestKeys.ticket("gina", sessionTtl = Duration.ofSeconds(2))}"))
 
-            assertEquals(4401, conn.awaitClose(Duration.ofSeconds(5)).code)
+            assertEquals(3000, conn.awaitClose(Duration.ofSeconds(5)).code)
         }
 
     @Test

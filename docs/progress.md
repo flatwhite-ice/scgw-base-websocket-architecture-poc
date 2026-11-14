@@ -70,8 +70,14 @@
 - direct backend에 세션 1개를 연결한 상태로 SIGTERM을 보냈다. 클라이언트는 **18초 후 1001**을 받았다(window 20초). 이어서 `Drain finished, 0 sessions still open` → `Graceful shutdown complete`
 - backend가 auth-api보다 먼저 뜨면 초기 JWKS 조회는 실패한다. 첫 핸드셰이크에서 미등록 kid를 보고 재조회해 정상 복구된다. 경고 로그에 예외 타입이 나오도록 개선했다.
 
+### close code 변경 (2026-11-15)
+- 토큰 만료 4401→**3000**, heartbeat 4408→**3008**, drain 1001→**1012**로 바꿨다. 모두 IANA 등록 코드다(decisions D13).
+- 위 M2/M3 기록의 4401/4408/1001은 당시 기준 값이다. `./gradlew build`로 새 코드 전체 통과를 확인했다(18 suites, 실패 0).
+- gateway relay 시 1014(Bad Gateway) 사용 여부는 E4에서 확인하기로 하고 후속 과제에 추가했다.
+
 ## 후속 과제
-- gateway drain 시 relay 세션별로 1001과 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
+- relay에서 backend가 비정상 종료될 때 클라이언트가 받는 close code 확인. 1014 Bad Gateway가 적절하다(decisions D13).
+- gateway drain 시 relay 세션별로 1012와 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
 - 500 에러 로그에 요청 URI의 `ticket`이 그대로 남는 문제 해결. 에러 핸들러 커스터마이즈가 필요하다(decisions D11).
 - M5: relay backend의 ingress를 ws-gateway로만 제한하는 NetworkPolicy. gateway 모드는 헤더를 신뢰하기 때문이다(decisions D8).
 - K8s 파드 IP 디스커버리(Spring Cloud Kubernetes 또는 headless Service)는 M5에서 붙인다.
