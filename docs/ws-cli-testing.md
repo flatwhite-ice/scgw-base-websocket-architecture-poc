@@ -188,4 +188,4 @@ relay 경로에서 backend가 비정상 종료되면(프로세스 강제 종료 
 
 핸드셰이크 인증 실패는 close code가 아니라 업그레이드 전에 HTTP 401로 응답한다.
 
-이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `GatewayE2ETest`). websocat 화면에서 close code를 확인하는 방법은 따로 검증하지 않았다.
+이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `GatewayE2ETest`). websocat 1.14.1은 close code를 보여 주지 않는다. `-v`를 붙여도 `Received WebSocket close message`만 출력된다. gateway에 SIGTERM을 보내 확인했으며, 20초 window 안에서 세션이 닫히는 것까지는 보인다.
