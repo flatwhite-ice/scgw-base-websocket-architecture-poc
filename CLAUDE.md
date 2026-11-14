@@ -1,96 +1,98 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+이 파일은 이 저장소에서 작업하는 Claude Code(claude.ai/code)를 위한 안내다.
 
-## Project
+## 프로젝트
 
-This repo is a PoC that compares two ways of serving WebSockets on 1 vCPU / 4 GB pods:
-- **A. Relay:** Client → `ws-gateway` (Spring Cloud Gateway, JWT check) → WebSocket service, chosen by path
-- **B. Direct:** Client → WebSocket service, which verifies the JWT during the handshake
+1 vCPU / 4 GB 파드에서 WebSocket을 제공하는 두 가지 방식을 비교하는 PoC다.
+- **A. Relay:** 클라이언트 → `ws-gateway`(Spring Cloud Gateway, JWT 검증) → 경로로 고른 WebSocket 서비스
+- **B. Direct:** 클라이언트 → WebSocket 서비스. 서비스가 핸드셰이크 중에 JWT를 직접 검증한다.
 
-There are two WebSocket services built on the shared `ws-backend-core`: `ws-backend` (echo/push, `/ws/echo` and `/ws/push`) and `ws-chat` (room chat, `/ws/chat`) (D17, D18).
+WebSocket 서비스는 공통 `ws-backend-core` 위에 만든 두 개다: `ws-backend`(echo/push, `/ws/echo`와 `/ws/push`)와 `ws-chat`(방 채팅, `/ws/chat`)(D17, D18).
 
-**The spec is `docs/handoff/handoff.md` (in Korean).** Track milestones in `docs/progress.md` and record decisions, and any deviation from the spec, in `docs/decisions.md` (D1, D2, …). Read both before making changes. M0–M3 are done on branch `poc/m0-m3`. M4 and later need docker, k6, and kind or k3d, and none of those are installed locally yet.
+**스펙은 `docs/handoff/handoff.md`다.** 마일스톤 진행은 `docs/progress.md`에, 결정과 스펙에서 벗어난 점은 `docs/decisions.md`(D1, D2, …)에 기록한다. 변경 전에 두 문서를 모두 읽는다. M0–M3는 `poc/m0-m3` 브랜치에서 끝났다. M4부터는 docker, k6, kind 또는 k3d가 필요한데 아직 로컬에 설치되어 있지 않다.
 
-Stack: JDK 25 (Temurin, installed at `~/Library/Java/JavaVirtualMachines/temurin-25.0.5`), Kotlin 2.3, Spring Boot 4.1, Spring Cloud 2025.1 (SCG 5.0, prefix `spring.cloud.gateway.server.webflux.*`), WebFlux + Reactor Netty + coroutines, and Jackson 3 (`tools.jackson.*`). **MVC is forbidden.**
+스택: JDK 25(Temurin, `~/Library/Java/JavaVirtualMachines/temurin-25.0.5`에 설치), Kotlin 2.3, Spring Boot 4.1, Spring Cloud 2025.1(SCG 5.0, 설정 prefix `spring.cloud.gateway.server.webflux.*`), WebFlux + Reactor Netty + 코루틴, Jackson 3(`tools.jackson.*`). **MVC는 사용 금지다.**
 
-## Commands
+## 명령어
 
 ```bash
-./gradlew build                                    # compile + ktlintCheck + all tests (must pass before commit)
-./gradlew ktlintFormat                             # auto-fix style (ktlint_official, max line 140)
-./gradlew :modules:ws-backend:test                 # one module
-./gradlew :modules:ws-backend:test --tests '*SelfModeTest'                       # one class
-./gradlew :modules:ws-backend:test --tests '*SelfModeTest.echo round trip*'      # one test (backtick names)
+./gradlew build                                    # 컴파일 + ktlintCheck + 전체 테스트(커밋 전에 반드시 통과)
+./gradlew ktlintFormat                             # 스타일 자동 수정(ktlint_official, 최대 140자)
+./gradlew :modules:ws-backend:test                 # 모듈 하나
+./gradlew :modules:ws-backend:test --tests '*SelfModeTest'                       # 클래스 하나
+./gradlew :modules:ws-backend:test --tests '*SelfModeTest.echo round trip*'      # 테스트 하나(백틱 이름)
 
-# Run locally (relay + direct side by side)
+# 로컬 실행(relay와 direct를 함께)
 ./gradlew :modules:auth-api:bootRun                                              # :8070
-./gradlew :modules:ws-backend:bootRun                                            # :8090, default = relay (trusts gateway headers)
-./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'   # :8092, verifies JWT itself
-./gradlew :modules:ws-chat:bootRun                                               # :8091, default = relay
-./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'      # :8093, verifies JWT itself
+./gradlew :modules:ws-backend:bootRun                                            # :8090, 기본값 = relay(게이트웨이 헤더 신뢰)
+./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'   # :8092, JWT를 직접 검증
+./gradlew :modules:ws-chat:bootRun                                               # :8091, 기본값 = relay
+./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'      # :8093, JWT를 직접 검증
 ./gradlew :modules:ws-gateway:bootRun                                            # :8080, /ws/echo,/ws/push -> :8090, /ws/chat/** -> :8091
-./gradlew :modules:ws-console:bootRun                                            # :8060, browser test console (via the gateway)
-java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093   # JDK-only E2E smoke
+./gradlew :modules:ws-console:bootRun                                            # :8060, 브라우저 테스트 콘솔(게이트웨이 경유)
+java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093   # JDK만으로 하는 E2E smoke
 ```
 
-The smoke script checks only the services each address serves; it skips any whose handshake returns 404. For manual websocat/curl commands (tokens, tickets, echo/push, chat, routing, 401 and spoofing checks), see `docs/ws-cli-testing.md`.
+smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확인하고, 핸드셰이크가 404인 서비스는 건너뛴다. websocat/curl 수동 명령(토큰, 티켓, echo/push, chat, 라우팅, 401과 위조 헤더 확인)은 `docs/ws-cli-testing.md`를 본다.
 
-Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-chat on :8091, which are the gateway's discovery targets. In that mode a service trusts the injected headers, so it must only be reachable through the gateway. The `direct` profile switches to self mode with JWKS, on :8092 for ws-backend and :8093 for ws-chat. The JWKS bean only exists in self mode with a non-blank URI.
+두 서비스의 기본값은 relay(gateway 인증 모드)다: ws-backend는 :8090, ws-chat은 :8091이고 게이트웨이의 discovery 대상이다. 이 모드에서는 서비스가 주입된 헤더를 신뢰하므로 게이트웨이를 통해서만 접근할 수 있어야 한다. `direct` 프로필은 JWKS를 쓰는 self 모드로 바꾸고, ws-backend는 :8092, ws-chat은 :8093에서 뜬다. JWKS 빈은 self 모드이고 URI가 비어 있지 않을 때만 생긴다.
 
-## Architecture
+## 아키텍처
 
-- **build-logic/** holds the convention plugins.
-  - `wspoc.kotlin-conventions` sets the toolchain, ktlint, JUnit, and BlockHound JVM flags.
-  - `wspoc.spring-app-conventions` adds Boot, WebFlux, and coroutines.
-  - `wspoc.spring-library-conventions` is for Spring libraries with no bootJar (`ws-backend-core`).
-- Versions live in `gradle/libs.versions.toml`. Boot and Cloud BOMs come in as Gradle `platform()` deps; the dependency-management plugin isn't used.
-- **common-auth** (Spring-free):
-  - `JwtIssuer`: `suspend`, runs on `Dispatchers.IO` because SecureRandom reads `/dev/urandom`.
-  - `JwtVerifier`: event-loop safe.
-  - `StaticKeySource` / `JwksKeySource`: non-blocking `HttpClient.sendAsync`, refetches on an unknown `kid`. The refetch limit is 5 s after a success and 0.5 s after a failure, and concurrent misses fetch once. The background loop backs off from 1 s to 30 s after a failure, so starting before auth-api is fine (D22).
-  - `TicketReplayGuard`: Caffeine; single-use tickets, enforced by whoever consumes the ticket.
-  - `GatewayHeaders`: `X-User-Id`, `X-Scopes`, `X-Auth-Exp`.
-  - `TicketMasking`.
-- **auth-api**: `/auth/token` (optional `ttlSeconds`, 1..access-token-ttl, for testing 3000 expiry; D23), `/auth/ws-ticket` (requires a Bearer access token; the ticket carries a `sexp` claim with the access token's expiry, which bounds the WS session), and `/.well-known/jwks.json`.
-- **ws-backend-core** (library, package `com.example.wspoc.wscore`, registered by AutoConfiguration, D17): the runtime shared by every WebSocket service.
-  - Endpoints are `WebSocketHandler` beans annotated `@WsEndpoint("/ws/...")` (class or `@Bean` method). `auth = WsEndpoint.Auth.NONE` makes an anonymous endpoint: no handshake auth and no 3000 expiry, but heartbeat and drain still apply (D20). `WsEndpointHandlerMapping` collects them at startup and fails fast on duplicates (D16). Raw WebSocket in WebFlux has no `@RequestMapping` model, and STOMP is Servlet-only.
-  - `WsHandshakeAuthFilter` rejects with 401, or 503 while draining, **before the upgrade**. It passes the principal on via `exchange.mutate().principal()`, and the handler reads `HandshakeInfo.principal`.
-  - `ManagedWsHandler` runs each session as a coroutine and owns its lifecycle. A service supplies only a per-session `WsSessionProtocol` (`onOpen`/`onText`/`onClose`), usually a `JsonWsProtocol`, which gives every service the same `{"type":...}` dispatch and error replies. The lifecycle covers:
-    - the bounded outbound `Channel`: `send` applies backpressure for replies, `trySend` drops when full for push and broadcast (counted in `droppedMessages`)
-    - heartbeat timeout closes with 3008 (Timeout)
-    - token expiry closes with 3000 (Unauthorized)
-    - `DrainCoordinator` (SmartLifecycle) closes sessions with 1001 (Going Away) plus jitter
-  - All close codes live in `CloseCodes` and must be RFC 6455 §7.4-valid: 1000–1003, 1007–1011, or 3000–4999 (D13), enforced by `CloseCodesRfc6455Test`. SCG rewrites anything else (e.g. 1012–1014) to 1002 on the relay path (D14).
-- **ws-backend**: `EchoPushProtocol` (echo/subscribe/unsubscribe), with service settings in `PushProperties` (`ws.push`).
-- **ws-chat**: `ChatProtocol` (join/say/leave). `ChatRooms` is in-memory per instance, so multiple instances split rooms; cross-instance fan-out is a follow-up (D18).
+- **build-logic/**: convention 플러그인
+  - `wspoc.kotlin-conventions`: toolchain, ktlint, JUnit, BlockHound JVM 플래그
+  - `wspoc.spring-app-conventions`: Boot, WebFlux, 코루틴
+  - `wspoc.spring-library-conventions`: bootJar가 없는 Spring 라이브러리용(`ws-backend-core`)
+- 버전은 `gradle/libs.versions.toml`에 있다. Boot와 Cloud BOM은 Gradle `platform()` 의존성으로 들어온다. dependency-management 플러그인은 쓰지 않는다.
+- **common-auth**(Spring 비의존):
+  - `JwtIssuer`: `suspend`. SecureRandom이 `/dev/urandom`을 읽으므로 `Dispatchers.IO`에서 실행한다.
+  - `JwtVerifier`: event loop에서 써도 안전하다.
+  - `StaticKeySource` / `JwksKeySource`: 논블로킹 `HttpClient.sendAsync`. 모르는 `kid`가 오면 다시 조회한다. 재조회 간격 제한은 성공 뒤 5초, 실패 뒤 0.5초이고, 동시에 들어온 miss는 한 번만 조회한다. 주기 루프는 실패하면 1초부터 30초까지 백오프하므로 auth-api보다 먼저 떠도 된다(D22).
+  - `TicketReplayGuard`: Caffeine. 티켓은 1회용이고, 티켓을 소비하는 쪽이 강제한다.
+  - `GatewayHeaders`: `X-User-Id`, `X-Scopes`, `X-Auth-Exp`
+  - `TicketMasking`
+- **auth-api**: `/auth/token`(선택 `ttlSeconds`, 1..access-token-ttl, 3000 만료 테스트용, D23), `/auth/ws-ticket`(Bearer access token 필요. 티켓에는 access token 만료 시각을 담은 `sexp` 클레임이 있고, 이것이 WS 세션 수명의 상한이 된다), `/.well-known/jwks.json`
+- **ws-backend-core**(라이브러리, 패키지 `com.example.wspoc.wscore`, AutoConfiguration으로 등록, D17): 모든 WebSocket 서비스가 공유하는 런타임
+  - 엔드포인트는 `@WsEndpoint("/ws/...")`를 붙인 `WebSocketHandler` 빈이다(클래스 또는 `@Bean` 메서드). `auth = WsEndpoint.Auth.NONE`이면 익명 엔드포인트가 된다: 핸드셰이크 인증과 3000 만료가 없지만 heartbeat와 drain은 그대로 적용된다(D20). `WsEndpointHandlerMapping`이 기동 시 이들을 모으고 경로가 중복되면 바로 실패한다(D16). WebFlux의 raw WebSocket에는 `@RequestMapping` 모델이 없고, STOMP는 Servlet 전용이다.
+  - `WsHandshakeAuthFilter`는 **업그레이드 전에** 401(drain 중이면 503)로 거절한다. principal은 `exchange.mutate().principal()`로 넘기고, 핸들러는 `HandshakeInfo.principal`로 읽는다.
+  - `ManagedWsHandler`는 세션마다 코루틴을 돌리고 수명을 관리한다. 서비스는 세션별 `WsSessionProtocol`(`onOpen`/`onText`/`onClose`)만 제공하면 된다. 보통은 `JsonWsProtocol`을 쓰며, 모든 서비스가 같은 `{"type":...}` 분기와 오류 응답을 갖게 된다. 수명 관리에 포함되는 것:
+    - 크기 제한이 있는 송신 `Channel`: 응답은 `send`로 backpressure를 걸고, push와 broadcast는 `trySend`로 가득 차면 버린다(`droppedMessages`로 집계)
+    - heartbeat 타임아웃이면 3008(Timeout)로 닫는다
+    - 토큰이 만료되면 3000(Unauthorized)으로 닫는다
+    - `DrainCoordinator`(SmartLifecycle)가 종료 시 세션을 1001(Going Away)과 jitter로 닫는다
+  - 모든 close 코드는 `CloseCodes`에 있고 RFC 6455 §7.4에 맞아야 한다: 1000–1003, 1007–1011, 3000–4999(D13). `CloseCodesRfc6455Test`가 강제한다. SCG는 relay 경로에서 그 밖의 코드(예: 1012–1014)를 1002로 바꾼다(D14).
+- **ws-backend**: `EchoPushProtocol`(echo/subscribe/unsubscribe). 서비스 설정은 `PushProperties`(`ws.push`)다.
+- **ws-chat**: `ChatProtocol`(join/say/leave). `ChatRooms`는 인스턴스별 메모리라 여러 대를 띄우면 방이 쪼개진다. 인스턴스 간 fan-out은 후속 과제다(D18).
 - **ws-gateway**:
-  - Auth is per route (D20). `GatewayEdgeFilter` is a GlobalFilter at highest precedence and runs on every routed request: it always strips client identity headers and returns 503 to upgrades while draining. The route filter `WsAuth` (`WsAuthGatewayFilterFactory`, declared as `filters: [WsAuth]`) authenticates every request on that route, injects identity headers, and removes `ticket` and `Authorization`. On a 401 it never calls the chain, so no upstream connection is opened. Its order is pinned to Edge + 1 so stripping always runs before injection.
-  - A new route that needs auth must declare `WsAuth`. If it's forgotten, the backend still rejects (fail-closed), but the client sees a handshake failure instead of a 401.
-  - Routes are declared in YAML under `spring.cloud.gateway.server.webflux.routes` (no `RouteLocator` bean, D15). There is one route per service, with non-overlapping paths (D18):
-    - `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`, with `WsAuth`
-    - `Path=/ws/chat/**` → `lb:ws://ws-chat`, with `WsAuth`
-    - `Path=/ws/public/**` → `lb:ws://ws-backend`, no auth (anonymous read-only push)
-    - Any other `/ws/...` gets a 404 before auth, because GlobalFilters only run on matched routes.
-  - When adding a service, also add it to `loadbalancer.eager-load.clients` and to the simple-discovery instances.
-  - The `static` profile (`application-static.yml`) sends to `${WS_BACKEND_URI}` and `${WS_CHAT_URI}` for experiment E3. Profiles replace the whole route list, so redefine every route when overriding.
-  - `GatewayDrainCoordinator` closes relayed sessions with 1001 plus jitter on shutdown. SCG keeps sessions private, so `RelaySessionTracking` wraps the `WebSocketService` bean (BeanPostProcessor) to register them; SCG's own filter is left untouched.
+  - 인증은 라우트 단위다(D20). `GatewayEdgeFilter`는 최우선 순위 GlobalFilter이고 라우팅되는 모든 요청에 적용된다: 클라이언트가 보낸 신원 헤더를 항상 제거하고, drain 중에는 업그레이드에 503을 준다. 라우트 필터 `WsAuth`(`WsAuthGatewayFilterFactory`, `filters: [WsAuth]`로 선언)는 그 라우트의 모든 요청을 인증하고, 신원 헤더를 넣고, `ticket`과 `Authorization`을 제거한다. 401이면 chain을 호출하지 않으므로 upstream 연결이 열리지 않는다. 순서는 Edge + 1로 고정해서 헤더 제거가 항상 주입보다 먼저 실행된다.
+  - 인증이 필요한 새 라우트는 반드시 `WsAuth`를 선언한다. 빠뜨려도 backend가 거절하지만(fail-closed), 클라이언트는 401 대신 핸드셰이크 실패를 보게 된다.
+  - 라우트는 YAML `spring.cloud.gateway.server.webflux.routes`에 선언한다(`RouteLocator` 빈 없음, D15). 서비스마다 라우트 하나이고 경로는 겹치지 않는다(D18):
+    - `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`, `WsAuth` 있음
+    - `Path=/ws/chat/**` → `lb:ws://ws-chat`, `WsAuth` 있음
+    - `Path=/ws/public/**` → `lb:ws://ws-backend`, 인증 없음(익명 읽기 전용 push)
+    - 그 밖의 `/ws/...`는 인증 전에 404다. GlobalFilter는 매칭된 라우트에서만 실행되기 때문이다.
+  - 서비스를 추가할 때는 `loadbalancer.eager-load.clients`와 simple-discovery 인스턴스에도 추가한다.
+  - `static` 프로필(`application-static.yml`)은 실험 E3용으로 `${WS_BACKEND_URI}`와 `${WS_CHAT_URI}`로 보낸다. 프로필은 라우트 목록 전체를 교체하므로, 덮어쓸 때는 모든 라우트를 다시 정의한다.
+  - `GatewayDrainCoordinator`는 종료 시 relay 중인 세션을 1001과 jitter로 닫는다. SCG는 세션을 외부에 노출하지 않으므로 `RelaySessionTracking`이 `WebSocketService` 빈을 감싸서(BeanPostProcessor) 세션을 등록한다. SCG 자체 필터는 건드리지 않는다.
+- **ws-console**(:8060, 개발 도구, D23): 빌드 없는 vanilla JS 화면(`src/main/resources/static/`)을 서빙하는 WebFlux 앱이다. 게이트웨이를 대상으로 ws-backend/ws-chat의 모든 케이스를 눌러 볼 수 있다.
+  - 브라우저는 `console.ws-base`에 `?ticket=`으로 WebSocket을 직접 연다.
+  - 토큰과 티켓은 `/api/token`, `/api/ticket`이 auth-api로 중계한다. 그래서 auth-api에 CORS가 필요 없다.
+  - `/api/probe`는 서버에서 핸드셰이크를 시도해 실제 HTTP 상태를 돌려준다. 브라우저는 업그레이드가 거절돼도 1006만 보기 때문이다. `/ws/...` 경로만 받고, 호스트와 query는 서버가 정한다.
 
-- **ws-console** (:8060, dev tool, D23): a WebFlux app that serves a no-build vanilla JS page (`src/main/resources/static/`) for clicking through every ws-backend/ws-chat case against the gateway. The browser opens WebSockets straight to `console.ws-base` with `?ticket=`. Token and ticket calls go through `/api/token` and `/api/ticket`, which relay to auth-api, so auth-api needs no CORS. `/api/probe` handshakes from the server and returns the real HTTP status, because a browser only sees 1006 on a rejected upgrade. It accepts a `/ws/...` path only; the server picks the host and query.
+## 규칙과 주의할 점
 
-## Rules and gotchas
-
-- **Never block an event loop.** BlockHound runs in every test JVM. Isolate unavoidable blocking on `Dispatchers.IO`/`boundedElastic` and leave a comment saying why. One-time class-init exceptions go in `modules/common-auth/src/testFixtures/.../WsPocBlockHoundIntegration.kt`, each with a reason.
-- Write handlers as `suspend`/`Flow`, and convert to and from Reactor only at the boundaries. Map `WebSocketMessage` payloads synchronously inside `receive().map{}`, because Reactor Netty frees the buffer right after `onNext`.
-- Wrap `session.close()` in `withContext(NonCancellable)`. If it's cancelled mid-write, the close frame is lost and the client sees 1006 (D9).
-- Logging: no per-message logs. Session open/close logs go to the dedicated `ws.session` logger at INFO and are on by default (`SessionLog` in core, `RelaySessionLog` in the gateway; D21). Turn them off for load tests with `logging.level.ws.session=WARN`, because per-connection logs distort the results. Log URI paths only, never the query (`ticket=`). The access log is opt-in (`ws.access-log.enabled`) and masks `ticket=`.
-- New log code uses kotlin-logging (`KotlinLogging.logger`, lazy lambdas). SLF4J and Logback come from Spring Boot and its BOM; don't declare or pin them.
-- Spring tests that end in `= runBlocking { ... }` must return `Unit`. If the last expression is a value, the method isn't void and JUnit silently skips it.
-- Put configuration in `@ConfigurationProperties` data classes (`WsProperties`, `GatewayProperties`, `AuthProperties`). To disable JWKS in tests, set the URI to `""`; the conditions check for a blank value.
-- Tests:
-  - `ws-backend-core` `testFixtures` provides `TestKeys` (stands in for auth-api) and `WsTestClient`. The service and gateway tests reuse them.
-  - Gateway E2E tests boot real services in the same JVM: `RelayBackend` and `RelayChat`, both instances of `RelayApp`. Each records the handshakes it received, so tests can assert routing. They use `spring.config.name=ws-backend-e2e` so they don't load the gateway's yml.
-  - Because the services are on the gateway's test classpath, the gateway's `src/test/resources/application.properties` excludes core's AutoConfiguration from the gateway context. Helper Spring configs in a scanned test package must be `@TestConfiguration`.
-  - Don't write `/**` inside KDoc: it opens a nested Kotlin comment.
-- Write all code comments (KDoc, `//`, and `#` in yml/toml) in Korean. Keep identifiers, config keys, close codes and RFC section names as they are.
-- Stay inside the current milestone's scope. Log follow-ups under "후속 과제" (follow-ups) in `docs/progress.md`.
+- **event loop를 절대 막지 않는다.** 모든 테스트 JVM에서 BlockHound가 돈다. 피할 수 없는 블로킹은 `Dispatchers.IO`/`boundedElastic`으로 격리하고 이유를 주석으로 남긴다. 1회성 클래스 초기화 예외는 `modules/common-auth/src/testFixtures/.../WsPocBlockHoundIntegration.kt`에 항목마다 이유와 함께 넣는다.
+- 핸들러는 `suspend`/`Flow`로 작성하고, Reactor와의 변환은 경계에서만 한다. `WebSocketMessage` payload는 `receive().map{}` 안에서 동기적으로 변환한다. Reactor Netty가 `onNext` 직후 버퍼를 해제하기 때문이다.
+- `session.close()`는 `withContext(NonCancellable)`로 감싼다. 쓰는 도중 취소되면 close 프레임이 사라지고 클라이언트는 1006을 받는다(D9).
+- 로깅: 메시지 단위 로그는 남기지 않는다. 세션 열림/종료 로그는 전용 `ws.session` 로거에 INFO로 남기고 기본은 켜져 있다(core의 `SessionLog`, gateway의 `RelaySessionLog`, D21). 연결 단위 로그는 결과를 왜곡하므로 부하 테스트에서는 `logging.level.ws.session=WARN`으로 끈다. URI는 경로만 남기고 query(`ticket=`)는 절대 남기지 않는다. access log는 선택(`ws.access-log.enabled`)이고 `ticket=`을 마스킹한다.
+- 새 로그 코드는 kotlin-logging(`KotlinLogging.logger`, lazy 람다)을 쓴다. SLF4J와 Logback은 Spring Boot와 BOM에서 오므로 따로 선언하거나 버전을 고정하지 않는다.
+- `= runBlocking { ... }`로 끝나는 Spring 테스트는 `Unit`을 반환해야 한다. 마지막 식이 값이면 메서드가 void가 아니게 되어 JUnit이 조용히 건너뛴다.
+- 설정은 `@ConfigurationProperties` data class(`WsProperties`, `GatewayProperties`, `AuthProperties`)에 둔다. 테스트에서 JWKS를 끄려면 URI를 `""`로 둔다. 조건은 빈 값인지로 판단한다.
+- 테스트:
+  - `ws-backend-core`의 `testFixtures`가 `TestKeys`(auth-api 대역)와 `WsTestClient`를 제공한다. 서비스와 게이트웨이 테스트가 재사용한다.
+  - 게이트웨이 E2E 테스트는 같은 JVM에서 실제 서비스를 띄운다: `RelayBackend`와 `RelayChat`이고 둘 다 `RelayApp`의 인스턴스다. 각자 받은 핸드셰이크를 기록하므로 테스트가 라우팅을 확인할 수 있다. 게이트웨이 yml을 읽지 않도록 `spring.config.name=ws-backend-e2e`를 쓴다.
+  - 서비스들이 게이트웨이 테스트 classpath에 있으므로, 게이트웨이의 `src/test/resources/application.properties`가 core AutoConfiguration을 게이트웨이 컨텍스트에서 제외한다. 스캔되는 테스트 패키지의 보조 Spring 설정은 `@TestConfiguration`이어야 한다.
+  - KDoc 안에 `/**`를 쓰지 않는다. Kotlin 중첩 주석이 열린다.
+- 모든 코드 주석(KDoc, `//`, yml/toml의 `#`)은 한국어로 쓴다. 식별자, 설정 키, close 코드, RFC 절 이름은 그대로 둔다.
+- 현재 마일스톤 범위 안에서 작업한다. 후속 과제는 `docs/progress.md`의 "후속 과제"에 기록한다.
