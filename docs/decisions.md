@@ -102,9 +102,9 @@
 
 ## D10. ws-gateway (M3)
 
-- **라우트:** `RouteLocatorBuilder` 빈으로 정의한다. `ws.gateway.backend.mode`로 대상을 전환한다.
-  - `discovery`(기본): `lb:ws://ws-backend`
-  - `static`: `ws.gateway.backend.uri`. ClusterIP VIP로 보내는 E3용 모드다.
+- **라우트:** ~~`RouteLocatorBuilder` 빈 + `ws.gateway.backend.mode`~~ → D15에서 YAML(`spring.cloud.gateway.server.webflux.routes`)로 옮겼다.
+  - 기본: `lb:ws://ws-backend`
+  - `static` 프로필: 고정 URI(`WS_BACKEND_URI`). ClusterIP VIP로 보내는 E3용이다.
   - 로컬과 compose는 `SimpleDiscoveryClient` 정적 목록을 쓴다. K8s 파드 IP 디스커버리는 M5에서 붙인다.
 - **`WsAuthFilter`:** GlobalFilter이고 order는 HIGHEST_PRECEDENCE다.
   - 모든 요청에서 `X-User-Id`, `X-Scopes`, `X-Auth-Exp`를 제거한다.
@@ -196,3 +196,12 @@
    - backend가 close 프레임 없이 끊으면 `proxySession.closeStatus()`가 값 없이 끝난다. 그러면 close 전파(257–260행)가 일어나지 않고, 메시지 펌프 종료와 함께 기본 close가 나간다.
    - direct 구조에서는 같은 상황이 close 프레임 없는 TCP 종료(클라이언트 1006)로 보인다.
 4. **메시지 중계(266–291행):** 프레임을 파싱하지 않고 `retain()`한 버퍼를 그대로 반대편 세션으로 보낸다. gateway가 응답 내용(예: D12의 `server` 필드)을 바꾸지 않는 근거다.
+
+## D15. 게이트웨이 라우트를 YAML로 관리
+
+- **변경:** Kotlin `RouteLocator` 빈과 `ws.gateway.backend.{mode,service-id,uri}`를 없애고, SCG 표준 방식인 `spring.cloud.gateway.server.webflux.routes`(RouteDefinition 리스트)로 옮겼다.
+  - SCG 5.0에서 키 이름이 `spring.cloud.gateway.routes` → `spring.cloud.gateway.server.webflux.routes`로 바뀌었다(jar metadata에서 확인).
+  - 이유: 라우트를 코드 수정·재빌드 없이 설정(ConfigMap, 프로필, 환경 변수)으로 바꿀 수 있고, 일반적인 SCG 운영 방식과 맞는다.
+- **대상 전환:** 기본 `application.yml`은 `lb:ws://ws-backend`(discovery). `static` 프로필(`application-static.yml`)은 `${WS_BACKEND_URI:ws://localhost:8081}`로 보낸다.
+  - 주의: 리스트 프로퍼티는 프로필 사이에서 항목 단위로 병합되지 않고 **통째로 교체**된다. 그래서 `routes[0].uri`만 덮어쓰면 id·predicates가 사라진다. static 프로필은 라우트 전체를 다시 정의한다.
+- **검증:** `RouteDefinitionTest`가 두 경우의 바인딩 결과(uri)를 확인하고, `GatewayE2ETest`/`GatewayDrainTest`가 YAML 라우트로 실제 relay를 확인한다.

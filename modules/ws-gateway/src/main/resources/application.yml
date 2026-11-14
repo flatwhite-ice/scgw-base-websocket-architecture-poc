@@ -8,6 +8,13 @@ spring:
     gateway:
       server:
         webflux:
+          # 라우트 정의(RouteDefinition). 기본은 discovery: Spring Cloud LoadBalancer가 backend 인스턴스마다
+          # upstream 목적지를 나눈다. 고정 URI(ClusterIP, 실험 E3)는 `static` 프로필(application-static.yml)을 쓴다.
+          routes:
+            - id: ws-backend
+              uri: lb:ws://ws-backend
+              predicates:
+                - Path=/ws/**
           httpclient:
             # upstream(gateway -> ws-backend) Reactor Netty 클라이언트 튜닝.
             connect-timeout: 2000
@@ -34,9 +41,6 @@ server:
 
 ws:
   gateway:
-    backend:
-      mode: discovery
-      service-id: ws-backend
     auth:
       jwks-uri: http://localhost:8080/.well-known/jwks.json
     drain:
