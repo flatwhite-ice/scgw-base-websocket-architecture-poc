@@ -47,7 +47,7 @@ Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-c
 - **common-auth** (Spring-free):
   - `JwtIssuer`: `suspend`, runs on `Dispatchers.IO` because SecureRandom reads `/dev/urandom`.
   - `JwtVerifier`: event-loop safe.
-  - `StaticKeySource` / `JwksKeySource`: non-blocking `HttpClient.sendAsync`, refetches on an unknown `kid`.
+  - `StaticKeySource` / `JwksKeySource`: non-blocking `HttpClient.sendAsync`, refetches on an unknown `kid`. The refetch limit is 5 s after a success and 0.5 s after a failure, and concurrent misses fetch once. The background loop backs off from 1 s to 30 s after a failure, so starting before auth-api is fine (D22).
   - `TicketReplayGuard`: Caffeine; single-use tickets, enforced by whoever consumes the ticket.
   - `GatewayHeaders`: `X-User-Id`, `X-Scopes`, `X-Auth-Exp`.
   - `TicketMasking`.

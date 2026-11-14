@@ -119,6 +119,11 @@
   - 로그는 gateway 16줄, backend 10줄, chat 6줄이다. 정상 종료는 `code=1000 reason=bye closedBy=client`로 남았다.
   - 3개 앱 로그에서 티켓 원문은 0건이었다.
 
+### JWKS 초기 조회 실패 복구 (2026-11-15)
+- 첫 JWKS 조회 실패 뒤 5초 동안 핸드셰이크가 401이던 문제를 고쳤다(decisions D22). 실패 뒤 재조회 간격은 0.5초, 동시 miss는 1회만 조회하고, 주기 루프는 1초부터 최대 30초까지 백오프한다.
+- `./gradlew build` 통과(31 suites, 90 tests, 실패 0)
+- 실제 프로세스: gateway와 direct backend를 먼저 띄우고 auth-api를 나중에 띄웠다. auth-api 기동 직후 smoke를 실행했고 결과는 **ALL OK**였다.
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
@@ -129,4 +134,3 @@
 - ws-chat 인스턴스 간 방 fan-out(Redis pub/sub 등). 지금은 방이 인스턴스 로컬이라 여러 대를 띄우면 방이 쪼개진다(decisions D18).
 - M4 compose / M5 매니페스트에 ws-chat 추가(스펙의 "ws-backend x2"와 별도 서비스).
 - `WsAuth` 라우트 필터에 설정 항목 추가 검토(예: 필요한 scope). 지금은 인자 없는 `- WsAuth`다(decisions D20).
-- JWKS 초기 조회 실패 후 5초(`minRefetchInterval`) 동안은 미등록 kid가 와도 재조회하지 않아 핸드셰이크가 401이 된다. 앱을 동시에 띄우면 auth-api보다 먼저 뜬 게이트웨이나 direct 서비스에서 재현된다. 실패 직후에는 재시도를 허용하는 방안을 검토한다.

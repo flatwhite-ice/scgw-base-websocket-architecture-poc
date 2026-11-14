@@ -305,3 +305,15 @@
 - **민감 정보:** URI는 경로만 남긴다. 익명 라우트는 쿼리를 지우지 않으므로, `?ticket=`이 붙어 와도 로그에 남지 않게 하기 위해서다(`RelaySessionLogTest`).
 - **종료 코드를 읽는 법:** relay에서 클라이언트가 close 프레임 없이 끊으면 게이트웨이는 1006, backend는 1002로 남는다. SCG가 1006을 1002로 바꿔 전달하기 때문이다(D14).
 - **검증:** `SessionLogTest`(열림/종료, 서버 종료 3000, 익명, WARN이면 꺼짐), `RelaySessionLogTest`(route/user/upstream, 쿼리 미기록)
+
+## D22. JWKS 초기 조회 실패 후 빠른 복구
+
+- **문제:** 게이트웨이나 direct 서비스가 auth-api보다 먼저 뜨면 첫 JWKS 조회가 실패한다. 이후 모르는 `kid`가 와도 재조회 간격 제한(`minRefetchInterval` 5초) 때문에 조회하지 않았다. 그래서 auth-api가 떠 있어도 최대 5초 동안 정상 티켓이 401이었다. 주기 루프도 실패 후 `refreshInterval`(5분)을 그대로 기다렸다.
+- **수정(`JwksKeySource`):**
+  - 재조회 간격을 직전 조회 결과에 따라 나눴다. 성공 뒤에는 `minRefetchInterval`(5초)을 유지한다. 엉뚱한 `kid`를 계속 보내는 요청에 auth-api가 두들겨 맞지 않게 하기 위해서다. 실패 뒤에는 `failureRetryInterval`(0.5초)이다.
+  - 재조회 여부는 lock 안에서 다시 판단한다. 동시에 들어온 miss는 한 번만 조회하고, 기다리는 동안 다른 코루틴이 받아 온 키를 그대로 쓴다.
+  - 주기 루프는 실패하면 1초부터 두 배씩, 최대 30초까지 백오프하며 다시 시도한다. 핸드셰이크가 없어도 auth-api가 뜨면 곧 키를 받는다.
+  - 실패 뒤 첫 성공 때 `JWKS refresh ... recovered` INFO 로그를 남긴다.
+- **검증:**
+  - `JwksKeySourceTest`에 4개를 추가했다. 실패 직후 miss 즉시 재조회, 실패 후 재시도 빈도 제한, 동시 miss 1회 조회, 주기 루프 백오프 복구다.
+  - 실제 프로세스: gateway와 direct backend를 auth-api보다 먼저 띄우고, auth-api 기동 직후 바로 smoke를 실행했다. 결과는 **ALL OK**였고, 첫 핸드셰이크 시점에 `recovered`가 기록됐다.
