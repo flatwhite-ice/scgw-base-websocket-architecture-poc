@@ -70,6 +70,7 @@ class AuthControllerTest(
             assertEquals("alice", accessPrincipal.userId)
             assertEquals(setOf("ws"), accessPrincipal.scopes)
             assertEquals("alice", ticketPrincipal.userId)
+            assertEquals(access.expiresAt, ticketPrincipal.expiresAt, "WS session is bound to the access token expiry")
             assertEquals(FailureReason.REPLAYED, (verifier.verify(ticket.ticket, TokenType.WS_TICKET) as AuthResult.Failure).reason)
         }
 

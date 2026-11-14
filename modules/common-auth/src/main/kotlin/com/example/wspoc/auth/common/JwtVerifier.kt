@@ -7,6 +7,7 @@ import com.nimbusds.jwt.SignedJWT
 import java.text.ParseException
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 
 /**
  * Verifies RS256 JWTs issued by [JwtIssuer]. Pure CPU work apart from [KeySource] lookups,
@@ -63,7 +64,14 @@ class JwtVerifier(
                 ?.filter { it.isNotBlank() }
                 ?.toSet()
                 .orEmpty()
-        return AuthResult.Success(AuthPrincipal(userId, scopes, expiresAt))
+        // A ticket only has to be redeemed before its own `exp`; the session it opens lives until the access token expires.
+        val sessionExpiresAt =
+            if (expected == TokenType.WS_TICKET) {
+                claims.getLongClaim(Claims.SESSION_EXPIRES_AT)?.let(Instant::ofEpochSecond) ?: expiresAt
+            } else {
+                expiresAt
+            }
+        return AuthResult.Success(AuthPrincipal(userId, scopes, sessionExpiresAt))
     }
 
     private fun fail(reason: FailureReason) = AuthResult.Failure(reason)

@@ -1,0 +1,6 @@
+# Relay (architecture A): only reachable through ws-gateway, which authenticates and injects X-User-Id etc.
+server:
+  port: 8081
+ws:
+  auth:
+    mode: gateway

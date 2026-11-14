@@ -59,7 +59,14 @@ class AuthController(
                 is AuthResult.Success -> result.principal
                 is AuthResult.Failure -> throw ResponseStatusException(HttpStatus.UNAUTHORIZED, result.reason.name)
             }
-        val issued = issuer.issue(principal.userId, principal.scopes, TokenType.WS_TICKET, props.ticketTtl)
+        val issued =
+            issuer.issue(
+                principal.userId,
+                principal.scopes,
+                TokenType.WS_TICKET,
+                props.ticketTtl,
+                sessionExpiresAt = principal.expiresAt,
+            )
         return TicketResponse(ticket = issued.token, expiresAt = issued.expiresAt)
     }
 

@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.UUID
 
@@ -38,16 +40,19 @@ class JwtIssuer(
         scopes: Set<String>,
         type: TokenType,
         ttl: Duration,
-    ): IssuedToken = withContext(randomDispatcher) { issueBlocking(userId, scopes, type, ttl) }
+        sessionExpiresAt: Instant? = null,
+    ): IssuedToken = withContext(randomDispatcher) { issueBlocking(userId, scopes, type, ttl, sessionExpiresAt) }
 
     private fun issueBlocking(
         userId: String,
         scopes: Set<String>,
         type: TokenType,
         ttl: Duration,
+        sessionExpiresAt: Instant?,
     ): IssuedToken {
         val now = clock.instant()
-        val expiresAt = now.plus(ttl)
+        // JWT NumericDate has second precision; truncate so IssuedToken.expiresAt matches the `exp` claim exactly.
+        val expiresAt = now.plus(ttl).truncatedTo(ChronoUnit.SECONDS)
         val jti = UUID.randomUUID().toString()
         val claims =
             JWTClaimsSet
@@ -58,6 +63,7 @@ class JwtIssuer(
                 .jwtID(jti)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(expiresAt))
+                .apply { sessionExpiresAt?.let { claim(Claims.SESSION_EXPIRES_AT, it.epochSecond) } }
                 .build()
         val header =
             JWSHeader
@@ -66,7 +72,6 @@ class JwtIssuer(
                 .type(JOSEObjectType.JWT)
                 .build()
         val jwt = SignedJWT(header, claims).apply { sign(signer) }
-        // `exp` has second precision; report what the token actually carries.
-        return IssuedToken(jwt.serialize(), jti, claims.expirationTime.toInstant())
+        return IssuedToken(jwt.serialize(), jti, expiresAt)
     }
 }

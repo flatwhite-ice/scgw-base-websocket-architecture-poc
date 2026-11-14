@@ -1,0 +1,31 @@
+package com.example.wspoc.backend.testing
+
+import com.example.wspoc.auth.common.JwtIssuer
+import com.example.wspoc.auth.common.KeySource
+import com.example.wspoc.auth.common.RsaKeys
+import com.example.wspoc.auth.common.StaticKeySource
+import com.example.wspoc.auth.common.TokenType
+import java.time.Duration
+
+/** A signing key shared by tests, standing in for auth-api. */
+object TestKeys {
+    val key = RsaKeys.generate("test-key")
+    val issuer = JwtIssuer(key)
+    val keySource: KeySource = StaticKeySource(key)
+
+    suspend fun accessToken(
+        userId: String,
+        ttl: Duration = Duration.ofMinutes(15),
+    ): String = issuer.issue(userId, setOf("ws"), TokenType.ACCESS, ttl).token
+
+    suspend fun ticket(
+        userId: String,
+        sessionTtl: Duration = Duration.ofMinutes(15),
+    ): String {
+        val sessionExpiresAt =
+            java.time.Instant
+                .now()
+                .plus(sessionTtl)
+        return issuer.issue(userId, setOf("ws"), TokenType.WS_TICKET, Duration.ofSeconds(30), sessionExpiresAt).token
+    }
+}

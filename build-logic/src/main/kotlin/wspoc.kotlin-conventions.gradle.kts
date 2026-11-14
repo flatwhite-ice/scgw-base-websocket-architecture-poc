@@ -7,10 +7,6 @@ plugins {
 val libs = the<VersionCatalogsExtension>().named("libs")
 fun lib(alias: String) = libs.findLibrary(alias).get()
 
-repositories {
-    mavenCentral()
-}
-
 kotlin {
     jvmToolchain(libs.findVersion("jdk").get().requiredVersion.toInt())
     compilerOptions {
@@ -27,6 +23,10 @@ dependencies {
     "testImplementation"(lib("blockhound"))
     "testImplementation"(lib("blockhound-junit-platform"))
     "testRuntimeOnly"(lib("junit-platform-launcher"))
+}
+
+plugins.withId("java-test-fixtures") {
+    dependencies { "testFixturesApi"(platform(lib("spring-boot-bom"))) }
 }
 
 tasks.withType<Test>().configureEach {

@@ -43,4 +43,7 @@ enum class FailureReason {
 object Claims {
     const val SCOPE = "scope"
     const val TYPE = "typ"
+
+    /** On WS tickets: expiry (epoch seconds) of the access token the ticket was exchanged for. Bounds the WS session. */
+    const val SESSION_EXPIRES_AT = "sexp"
 }

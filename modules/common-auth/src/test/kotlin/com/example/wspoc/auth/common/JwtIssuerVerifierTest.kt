@@ -88,6 +88,17 @@ class JwtIssuerVerifierTest {
         }
 
     @Test
+    fun `ticket principal expiry is the bound session expiry, not the ticket exp`() =
+        runTest {
+            val access = issuer.issue("u1", emptySet(), TokenType.ACCESS, Duration.ofMinutes(15))
+            val ticket = issuer.issue("u1", emptySet(), TokenType.WS_TICKET, Duration.ofSeconds(30), sessionExpiresAt = access.expiresAt)
+
+            val principal = assertIs<AuthResult.Success>(verifier.verify(ticket.token, TokenType.WS_TICKET)).principal
+
+            assertEquals(access.expiresAt, principal.expiresAt)
+        }
+
+    @Test
     fun `access token can be verified repeatedly`() =
         runTest {
             val access = issuer.issue("u1", emptySet(), TokenType.ACCESS, Duration.ofMinutes(1))

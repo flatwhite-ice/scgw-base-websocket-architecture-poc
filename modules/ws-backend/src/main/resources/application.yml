@@ -1,5 +1,17 @@
 spring:
   application:
     name: ws-backend
+  lifecycle:
+    # Must exceed ws.drain.window (+ close grace) so the drain phase is not cut short.
+    timeout-per-shutdown-phase: 35s
 server:
   port: 8081
+  shutdown: graceful
+
+# Run with a profile: `relay` (behind ws-gateway) or `direct` (self-authenticating).
+ws:
+  heartbeat:
+    interval: 30s
+    max-missed: 2
+  drain:
+    window: 20s

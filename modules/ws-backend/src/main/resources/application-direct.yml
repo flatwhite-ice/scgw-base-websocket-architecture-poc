@@ -1,0 +1,7 @@
+# Direct (architecture B): clients connect here and the backend verifies the JWT itself.
+server:
+  port: 8083
+ws:
+  auth:
+    mode: self
+    jwks-uri: http://localhost:8080/.well-known/jwks.json
