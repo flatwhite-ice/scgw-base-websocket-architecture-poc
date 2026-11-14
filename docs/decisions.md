@@ -317,3 +317,28 @@
 - **검증:**
   - `JwksKeySourceTest`에 4개를 추가했다. 실패 직후 miss 즉시 재조회, 실패 후 재시도 빈도 제한, 동시 miss 1회 조회, 주기 루프 백오프 복구다.
   - 실제 프로세스: gateway와 direct backend를 auth-api보다 먼저 띄우고, auth-api 기동 직후 바로 smoke를 실행했다. 결과는 **ALL OK**였고, 첫 핸드셰이크 시점에 `recovered`가 기록됐다.
+
+## D23. 브라우저 테스트 콘솔(ws-console)과 auth-api `ttlSeconds`
+
+- **목적:** ws-backend(echo, push, 공개 push)와 ws-chat의 각 케이스를 브라우저 화면에서 눌러 보고 정상 동작을 눈으로 확인한다. 지금까지는 CLI(websocat, `WsSmoke.java`)로만 확인할 수 있었다.
+- **구성:** 새 모듈 `modules/ws-console`(:8060)이다. 스펙에 없는 개발 도구다.
+  - Spring Boot WebFlux 앱이 빌드 없는 정적 화면(vanilla JS, `static/index.html`·`app.js`·`style.css`)을 서빙한다. 로컬에 node가 없고, Gradle 빌드 하나로 끝나게 하려는 것이다.
+  - 대상은 게이트웨이(relay, `console.ws-base`, 기본 `ws://localhost:8080`)만이다. 브라우저 WebSocket이 `?ticket=`으로 게이트웨이에 직접 연결한다(브라우저는 `Authorization` 헤더를 붙일 수 없다).
+- **auth-api 중계:** 화면은 콘솔 서버의 `/api/token`, `/api/ticket`만 호출하고, 콘솔 서버가 auth-api로 그대로 중계한다(상태와 본문 그대로). 같은 origin이라 auth-api에 CORS를 넣지 않았다.
+- **서버 측 probe(`/api/probe`):** 브라우저 WebSocket API는 핸드셰이크가 거절돼도 HTTP 상태(401/404/503)를 알려 주지 않고 close 1006만 준다. 그래서 거절 케이스는 콘솔 서버가 `ReactorNettyWebSocketClient`로 대신 핸드셰이크를 시도하고, Netty `WebSocketClientHandshakeException`의 응답 상태를 돌려준다.
+  - 자격증명 종류: `none`, `ticket`, `bearer`, `spoof`(위조 `X-User-Id`/`X-Scopes`만), `replay`(티켓 하나로 두 번)
+  - 경로만 받는다. `^/ws(/[A-Za-z0-9._~-]+)+$`이고 `..`가 없어야 하며, 호스트와 query는 서버가 정한다. 콘솔이 임의 주소로 접속하는 도구가 되지 않게 하기 위해서다.
+  - 로그에는 경로, 자격증명 종류, 상태만 남긴다(토큰과 티켓은 남기지 않는다).
+- **auth-api `ttlSeconds`(스펙과 다름):** `POST /auth/token`에 선택 필드 `ttlSeconds`를 추가했다. 화면에서 토큰 만료 종료(3000)를 몇 초 안에 보기 위해서다.
+  - 범위는 `1..auth.access-token-ttl`(기본 900초)이고, 벗어나면 400이다. 기본보다 긴 토큰은 만들 수 없다.
+  - 티켓의 `sexp`는 원래 access token 만료를 따르므로, 짧은 토큰으로 받은 티켓의 세션은 그 시각에 3000으로 닫힌다.
+- **화면에서 확인하는 케이스:**
+  - Echo: 응답의 `userId`, `server`, 왕복 지연. `invalid json`, `unknown type` 오류
+  - Push: 자동 구독, subscribe/unsubscribe, 수신 수와 초당 수신
+  - 공개 Push: 토큰 없이 수신, `read only` 거절
+  - Chat: 참가자 여러 명, 같은 방 전달과 방 격리, `members`, `not joined`/`room required`
+  - 토큰 만료: 짧은 TTL로 연결하면 3000 `token expired`
+  - 거절 케이스(probe): 미인증 401, 티켓 재사용 101→401, 위조 헤더 401, 미라우팅 404, 공개 101
+  - close 코드마다 의미를 표시한다(1001 drain, 1002 relay 백엔드 실패, 1006 비정상/핸드셰이크 거절 등). drain은 게이트웨이를 내려야 해서 버튼으로 만들지 않았다.
+- **테스트:** `ConsoleControllerTest`가 auth-api와 게이트웨이 대신 Reactor Netty stub 하나를 띄우고 확인한다. 중계 상태 그대로, probe 101/401/404, replay, 경로 검증 400, 정적 화면 서빙이다. 화면 JS는 자동 테스트 대상이 아니라 실제 프로세스에서 확인한다.
+- **BlockHound:** ws-console에서 kotlin-reflect가 내장 타입 메타데이터를 처음 읽는 일이 첫 suspend 컨트롤러 호출 때 event loop에서 일어났다. JVM당 한 번이라 `WsPocBlockHoundIntegration` 허용 목록에 이유와 함께 추가했다.

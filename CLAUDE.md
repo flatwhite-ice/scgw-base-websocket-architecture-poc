@@ -30,6 +30,7 @@ Stack: JDK 25 (Temurin, installed at `~/Library/Java/JavaVirtualMachines/temurin
 ./gradlew :modules:ws-chat:bootRun                                               # :8091, default = relay
 ./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'      # :8093, verifies JWT itself
 ./gradlew :modules:ws-gateway:bootRun                                            # :8080, /ws/echo,/ws/push -> :8090, /ws/chat/** -> :8091
+./gradlew :modules:ws-console:bootRun                                            # :8060, browser test console (via the gateway)
 java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093   # JDK-only E2E smoke
 ```
 
@@ -51,7 +52,7 @@ Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-c
   - `TicketReplayGuard`: Caffeine; single-use tickets, enforced by whoever consumes the ticket.
   - `GatewayHeaders`: `X-User-Id`, `X-Scopes`, `X-Auth-Exp`.
   - `TicketMasking`.
-- **auth-api**: `/auth/token`, `/auth/ws-ticket` (requires a Bearer access token; the ticket carries a `sexp` claim with the access token's expiry, which bounds the WS session), and `/.well-known/jwks.json`.
+- **auth-api**: `/auth/token` (optional `ttlSeconds`, 1..access-token-ttl, for testing 3000 expiry; D23), `/auth/ws-ticket` (requires a Bearer access token; the ticket carries a `sexp` claim with the access token's expiry, which bounds the WS session), and `/.well-known/jwks.json`.
 - **ws-backend-core** (library, package `com.example.wspoc.wscore`, registered by AutoConfiguration, D17): the runtime shared by every WebSocket service.
   - Endpoints are `WebSocketHandler` beans annotated `@WsEndpoint("/ws/...")` (class or `@Bean` method). `auth = WsEndpoint.Auth.NONE` makes an anonymous endpoint: no handshake auth and no 3000 expiry, but heartbeat and drain still apply (D20). `WsEndpointHandlerMapping` collects them at startup and fails fast on duplicates (D16). Raw WebSocket in WebFlux has no `@RequestMapping` model, and STOMP is Servlet-only.
   - `WsHandshakeAuthFilter` rejects with 401, or 503 while draining, **before the upgrade**. It passes the principal on via `exchange.mutate().principal()`, and the handler reads `HandshakeInfo.principal`.
@@ -74,6 +75,8 @@ Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-c
   - When adding a service, also add it to `loadbalancer.eager-load.clients` and to the simple-discovery instances.
   - The `static` profile (`application-static.yml`) sends to `${WS_BACKEND_URI}` and `${WS_CHAT_URI}` for experiment E3. Profiles replace the whole route list, so redefine every route when overriding.
   - `GatewayDrainCoordinator` closes relayed sessions with 1001 plus jitter on shutdown. SCG keeps sessions private, so `RelaySessionTracking` wraps the `WebSocketService` bean (BeanPostProcessor) to register them; SCG's own filter is left untouched.
+
+- **ws-console** (:8060, dev tool, D23): a WebFlux app that serves a no-build vanilla JS page (`src/main/resources/static/`) for clicking through every ws-backend/ws-chat case against the gateway. The browser opens WebSockets straight to `console.ws-base` with `?ticket=`. Token and ticket calls go through `/api/token` and `/api/ticket`, which relay to auth-api, so auth-api needs no CORS. `/api/probe` handshakes from the server and returns the real HTTP status, because a browser only sees 1006 on a rejected upgrade. It accepts a `/ws/...` path only; the server picks the host and query.
 
 ## Rules and gotchas
 

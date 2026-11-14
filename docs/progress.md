@@ -124,6 +124,23 @@
 - `./gradlew build` 통과(31 suites, 90 tests, 실패 0)
 - 실제 프로세스: gateway와 direct backend를 먼저 띄우고 auth-api를 나중에 띄웠다. auth-api 기동 직후 smoke를 실행했고 결과는 **ALL OK**였다.
 
+### 브라우저 테스트 콘솔 (2026-11-15)
+- 새 모듈 `ws-console`(:8060)을 추가했다. 게이트웨이 경유로 echo, push, 공개 push, chat(여러 참가자), 토큰 만료 3000, 거절 케이스(서버 probe)를 화면에서 확인한다(decisions D23).
+- auth-api `/auth/token`에 선택 필드 `ttlSeconds`(1..900)를 추가했다.
+- `./gradlew build` 통과
+  - 새 테스트: `ConsoleControllerTest` 5개, `WsConsoleApplicationTests`, `AuthControllerTest` ttl 1개(33 suites, 97 tests, 실패 0)
+- 실제 프로세스(기본 포트: auth 8070, gateway 8080, ws-backend 8090, ws-chat 8091, console 8060)
+  - smoke(게이트웨이) **ALL OK**
+  - curl `/api/probe`: echo·chat 티켓 101, Bearer 101, 미인증 401, 재사용 101→401, 위조 헤더 401, `/ws/unknown` 404, 공개 101, 잘못된 경로 400
+  - 헤드리스 Chrome(CDP)으로 화면을 조작했다.
+    - echo: 응답, RTT, `invalid json`/`unknown type`, 종료 1000
+    - push: 자동 수신, 100ms 구독 시 초당 10, unsubscribe 후 정지
+    - 공개 push: 수신과 `read only`
+    - chat 3명: lobby 두 명 모두 수신, other 방은 미수신, `room required`/`not joined`
+    - 토큰 만료: TTL 3초로 3000 `token expired`(만료 시각과 차이 0.0s)
+    - probe 전체: 10/10
+  - 4개 앱 로그에서 티켓 원문은 0건이었다.
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
@@ -134,3 +151,4 @@
 - ws-chat 인스턴스 간 방 fan-out(Redis pub/sub 등). 지금은 방이 인스턴스 로컬이라 여러 대를 띄우면 방이 쪼개진다(decisions D18).
 - M4 compose / M5 매니페스트에 ws-chat 추가(스펙의 "ws-backend x2"와 별도 서비스).
 - `WsAuth` 라우트 필터에 설정 항목 추가 검토(예: 필요한 scope). 지금은 인자 없는 `- WsAuth`다(decisions D20).
+- ws-console: direct(:8092/:8093) 대상 선택, drain(1001) 시나리오 버튼(게이트웨이 종료 연동) 검토(decisions D23).

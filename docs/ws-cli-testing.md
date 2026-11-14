@@ -2,6 +2,9 @@
 
 게이트웨이(relay)와 direct 경로에 WebSocket을 연결해 수동으로 확인하는 명령어 모음이다.
 WebSocket 서비스는 두 개다: **ws-backend**(echo/push)와 **ws-chat**(방 단위 채팅). 게이트웨이가 경로로 서비스를 고른다.
+> 브라우저로 확인하려면 테스트 콘솔을 쓴다: `./gradlew :modules:ws-console:bootRun` 후 http://localhost:8060 (게이트웨이 경유, decisions D23).
+> 화면에서 echo/push/공개 push/chat/토큰 만료를 눌러 보고, 거절 케이스(401/404)는 콘솔 서버의 probe로 실제 HTTP 상태를 본다.
+
 아래 명령은 websocat 1.14.1 / macOS 기준으로 실제 실행해 결과를 확인했다(2026-11-15).
 
 ## 1. 준비
@@ -25,6 +28,7 @@ websocat --version        # websocat 1.14.1
 | ws-chat (relay, 기본값) | 8091 | `./gradlew :modules:ws-chat:bootRun` |
 | ws-backend (direct, 선택) | 8092 | `./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'` |
 | ws-chat (direct, 선택) | 8093 | `./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'` |
+| ws-console (브라우저 콘솔, 선택) | 8060 | `./gradlew :modules:ws-console:bootRun` |
 
 - 경로 구성
   - relay: 클라이언트 → **8080(gateway)** → 경로에 따라

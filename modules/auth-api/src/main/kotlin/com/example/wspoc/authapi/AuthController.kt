@@ -14,11 +14,14 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.Instant
 
 data class TokenRequest(
     val userId: String,
     val scopes: Set<String>? = null,
+    /** 선택. 테스트 콘솔에서 토큰 만료(3000)를 보기 위한 짧은 TTL. 1초 이상, 기본 TTL 이하만 허용한다(D23). */
+    val ttlSeconds: Long? = null,
 )
 
 data class TokenResponse(
@@ -45,7 +48,14 @@ class AuthController(
         @RequestBody request: TokenRequest,
     ): TokenResponse {
         if (request.userId.isBlank()) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required")
-        val issued = issuer.issue(request.userId, request.scopes ?: props.defaultScopes, TokenType.ACCESS, props.accessTokenTtl)
+        val ttl =
+            request.ttlSeconds?.let {
+                if (it < 1 || it > props.accessTokenTtl.seconds) {
+                    throw ResponseStatusException(HttpStatus.BAD_REQUEST, "ttlSeconds must be 1..${props.accessTokenTtl.seconds}")
+                }
+                Duration.ofSeconds(it)
+            } ?: props.accessTokenTtl
+        val issued = issuer.issue(request.userId, request.scopes ?: props.defaultScopes, TokenType.ACCESS, ttl)
         return TokenResponse(token = issued.token, expiresAt = issued.expiresAt)
     }
 

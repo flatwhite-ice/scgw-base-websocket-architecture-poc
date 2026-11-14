@@ -15,10 +15,13 @@ import org.springframework.http.MediaType
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.test.web.reactive.server.expectBody
 import java.net.URI
+import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
@@ -114,6 +117,38 @@ class AuthControllerTest(
             .exchange()
             .expectStatus()
             .isBadRequest
+    }
+
+    @Test
+    fun `ttlSeconds shortens the access token and is bounded by the default ttl`() {
+        val before = Instant.now()
+        val short =
+            assertNotNull(
+                client
+                    .post()
+                    .uri("/auth/token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(mapOf("userId" to "short", "ttlSeconds" to 10))
+                    .exchange()
+                    .expectStatus()
+                    .isOk
+                    .expectBody<TokenResponse>()
+                    .returnResult()
+                    .responseBody,
+            )
+        val ttl = Duration.between(before, short.expiresAt).seconds
+        assertTrue(ttl in 8..11, "ttl=$ttl")
+
+        for (bad in listOf(0, 15 * 60 + 1)) {
+            client
+                .post()
+                .uri("/auth/token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(mapOf("userId" to "short", "ttlSeconds" to bad))
+                .exchange()
+                .expectStatus()
+                .isBadRequest
+        }
     }
 
     @Test

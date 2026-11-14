@@ -17,4 +17,5 @@ include(
     "modules:ws-backend",
     "modules:ws-chat",
     "modules:ws-gateway",
+    "modules:ws-console",
 )
