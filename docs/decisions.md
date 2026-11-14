@@ -69,7 +69,7 @@
   - `delay()`가 kotlinx의 단일 DefaultExecutor 스레드 대신 Reactor 타이머(코어 수만큼)를 쓴다. 2만 세션 × 1초 push에서 타이머 스레드 하나가 병목이 되는 것을 피하기 위해서다.
   - parallel 스레드는 non-blocking 스레드라 BlockHound 검사 대상이다.
 - **outbound:** 세션마다 bounded `Channel`(`ws.outbound-buffer-size`, 기본 256)을 둔다.
-  - push는 `trySend`로 보내고, 큐가 가득 차면 드롭하고 `droppedPushMessages`에 집계한다(E2의 "드롭 여부").
+  - push는 `trySend`로 보내고, 큐가 가득 차면 드롭하고 `droppedPushMessages`에 집계한다(E2의 "드롭 여부"). D17 이후 이름은 `ManagedWsHandler.droppedMessages`이고 채팅 broadcast의 드롭도 함께 센다.
   - echo 응답은 `send`로 보내 수신 루프에 backpressure를 건다.
 - **inbound:** `receive().map(...)`에서 텍스트를 동기적으로 추출한 뒤 Flow로 넘긴다. Reactor Netty는 `onNext` 직후 프레임 버퍼를 해제하기 때문이다.
 - **heartbeat:** `ws.heartbeat.interval`마다 ping을 보내고, pong 없이 연속 `max-missed`(2)회가 되면 **3008 Timeout**으로 종료한다(D13).
@@ -105,6 +105,7 @@
 - **라우트:** ~~`RouteLocatorBuilder` 빈 + `ws.gateway.backend.mode`~~ → D15에서 YAML(`spring.cloud.gateway.server.webflux.routes`)로 옮겼다.
   - 기본: `lb:ws://ws-backend`
   - `static` 프로필: 고정 URI(`WS_BACKEND_URI`). ClusterIP VIP로 보내는 E3용이다.
+  - D18에서 경로별 서비스 2개(ws-backend, ws-chat) 라우트로 늘렸다.
   - 로컬과 compose는 `SimpleDiscoveryClient` 정적 목록을 쓴다. K8s 파드 IP 디스커버리는 M5에서 붙인다.
 - **`WsAuthFilter`:** GlobalFilter이고 order는 HIGHEST_PRECEDENCE다.
   - 모든 요청에서 `X-User-Id`, `X-Scopes`, `X-Auth-Exp`를 제거한다.
@@ -204,12 +205,13 @@
   - 이유: 라우트를 코드 수정·재빌드 없이 설정(ConfigMap, 프로필, 환경 변수)으로 바꿀 수 있고, 일반적인 SCG 운영 방식과 맞는다.
 - **대상 전환:** 기본 `application.yml`은 `lb:ws://ws-backend`(discovery). `static` 프로필(`application-static.yml`)은 `${WS_BACKEND_URI:ws://localhost:8081}`로 보낸다.
   - 주의: 리스트 프로퍼티는 프로필 사이에서 항목 단위로 병합되지 않고 **통째로 교체**된다. 그래서 `routes[0].uri`만 덮어쓰면 id·predicates가 사라진다. static 프로필은 라우트 전체를 다시 정의한다.
+- **D18 이후:** 라우트가 서비스마다 하나씩(ws-backend, ws-chat) 있다. static 프로필은 `WS_BACKEND_URI`, `WS_CHAT_URI`를 쓴다.
 - **검증:** `RouteDefinitionTest`가 두 경우의 바인딩 결과(uri)를 확인하고, `GatewayE2ETest`/`GatewayDrainTest`가 YAML 라우트로 실제 relay를 확인한다.
 
 ## D16. WebSocket 엔드포인트를 `@WsEndpoint`로 등록
 
 - **변경:** `WsConfig`에 경로를 직접 적던 `SimpleUrlHandlerMapping` 빈을 없앴다. 대신 `WebSocketHandler` 빈에 `@WsEndpoint("/ws/...")`를 붙이면 `WsEndpointHandlerMapping`이 기동 시점에 모아서 등록한다.
-  - 붙이는 위치: `WebSocketHandler`를 구현한 클래스, 또는 `@Bean` 메서드. echo와 push는 같은 `WsSessionHandler`를 설정만 달리 쓰므로 `@Bean` 메서드에 붙였다.
+  - 붙이는 위치: `WebSocketHandler`를 구현한 클래스, 또는 `@Bean` 메서드. echo와 push는 같은 핸들러 클래스를 설정만 달리 쓰므로 `@Bean` 메서드에 붙였다(D17 이후 `ManagedWsHandler` + `EchoPushProtocol`).
   - 잘못된 구성(WebSocketHandler가 아닌 빈, 경로 없음, 경로 중복)은 기동 시점에 실패한다(`WsEndpointHandlerMappingTest`).
 - **왜 `@RequestMapping`/`@MessageMapping`이 아닌가:**
   - WebFlux의 순수 WebSocket에는 어노테이션 매핑 모델이 없다. URL 매핑은 업그레이드 때 한 번뿐이고, 연결 안의 메시지 분기(`type`)는 핸들러가 직접 한다.
@@ -217,3 +219,31 @@
   - RSocket `@MessageMapping`은 WebFlux에서 되지만 와이어 프로토콜이 바뀌어 PoC 측정 대상이 달라진다.
 - **매핑 순서:** order `-1`로 어노테이션 컨트롤러(order 0)보다 먼저 본다. 이전과 같다.
 
+## D17. 공통 런타임 `ws-backend-core` 분리
+
+- **배경:** 실전처럼 서로 다른 WebSocket 서비스 두 개(ws-backend, ws-chat)를 두기로 했다(D18). 두 서비스는 핸드셰이크 인증, 세션 수명 관리, drain이 같고 메시지 처리만 다르다.
+  - 스펙(handoff.md)은 ws-backend 하나를 전제로 한다. 이 결정과 D18이 그 차이다.
+- **모듈:** `modules/ws-backend-core`(라이브러리, bootJar 없음, 패키지 `com.example.wspoc.wscore`). 새 convention 플러그인 `wspoc.spring-library-conventions`를 쓴다.
+  - 옮긴 것: `WsHandshakeAuthFilter`, `HandshakeAuthenticator`, `SessionRegistry`, `DrainCoordinator`, `ServerIdentity`, `CloseCodes`, `@WsEndpoint`/`WsEndpointHandlerMapping`, `WsProperties`(`ws.*`), access log 마스킹, testFixtures(`TestKeys`, `WsTestClient`)
+  - `ws.push` 설정은 ws-backend 전용 `PushProperties`로 분리했다. 설정 키는 그대로다.
+- **등록 방식: AutoConfiguration.** 서비스 앱의 component scan(`com.example.wspoc.backend`, `com.example.wspoc.chat`)에 기대지 않는다. 의존성을 넣으면 붙는다.
+  - 부작용: ws-gateway 테스트 클래스패스에는 E2E용으로 서비스 앱이 들어 있어 core AutoConfiguration이 게이트웨이 컨텍스트에도 붙으려 한다(`webSocketService` 빈 충돌). 게이트웨이 `src/test/resources/application.properties`에서 `spring.autoconfigure.exclude`로 뺀다. 운영 게이트웨이에는 core가 없다.
+- **세션 런타임과 프로토콜 분리:** 기존 `WsSessionHandler`를 둘로 나눴다.
+  - `ManagedWsHandler`(core): 등록, bounded 송신 큐, heartbeat 3008, 토큰 만료 3000, drain 1001, 취소되지 않는 close(D9). 엔드포인트마다 하나.
+  - `WsSessionProtocol`(서비스): `onOpen` / `onText` / `onClose`. 세션마다 새로 만든다. `WsSessionContext`로 `send`(backpressure)와 `trySend`(드롭)를 쓴다.
+  - `JsonWsProtocol`(core): `{"type":...}` 분기와 오류 응답(`invalid json`, `unknown type`) 형식을 서비스 간에 맞춘다.
+- **검증:** 리팩터링 커밋에서는 기존 ws-backend·gateway 테스트를 수정 없이(import만 변경) 모두 통과시켰다.
+
+## D18. 서비스별 경로 라우팅과 ws-chat
+
+- **서비스:** ws-chat(`modules/ws-chat`, relay 8084 / direct 8085)을 추가했다. 엔드포인트는 `/ws/chat` 하나이고 방 단위 채팅이다(join / say / leave).
+- **게이트웨이 라우트:**
+  - `ws-backend`: `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`
+  - `ws-chat`: `Path=/ws/chat/**` → `lb:ws://ws-chat` (`/ws/chat` 자신도 매칭)
+  - ws-backend 경로를 `/ws/**`가 아니라 **명시적인 목록**으로 적었다. 경로가 겹치지 않으면 라우트 `order`에 결과가 좌우되지 않고, 새 서비스를 추가할 때 기존 라우트를 건드리지 않아도 된다.
+  - 어느 라우트에도 맞지 않는 `/ws/...`는 게이트웨이가 404로 응답한다. GlobalFilter(`WsAuthFilter`)는 매칭된 라우트에서만 실행되므로 인증 전에 404가 나고, upstream 연결도 없다.
+  - LoadBalancer eager-load 대상과 simple discovery 목록에 `ws-chat`을 추가했다.
+- **경로 prefix를 떼지 않는다(StripPrefix 없음):** 클라이언트가 보는 경로와 서비스의 `@WsEndpoint` 경로가 같다. 기존 `/ws/echo` 클라이언트가 그대로 동작한다.
+- **한계: 방은 인스턴스 로컬이다.** `ChatRooms`는 프로세스 메모리에 있어서 ws-chat을 여러 대 띄우면 같은 방 이름이라도 인스턴스마다 멤버가 따로다. 인스턴스 간 fan-out(Redis pub/sub 등)은 후속 과제로 둔다.
+  - broadcast는 `trySend`로 보낸다. 느린 멤버 하나 때문에 다른 멤버가 막히지 않는 대신, 큐가 가득 찬 멤버의 메시지는 버려진다.
+- **검증:** `ChatTest`(방 전달, 방 분리, leave/disconnect, 오류, 401, `/ws/echo` 404), `GatewayE2ETest`(경로별로 해당 서비스만 핸드셰이크를 받음, 미라우팅 404), `RouteDefinitionTest`(discovery·static 각 2개 라우트)

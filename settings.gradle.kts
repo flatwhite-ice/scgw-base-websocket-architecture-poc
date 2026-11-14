@@ -15,5 +15,6 @@ include(
     "modules:auth-api",
     "modules:ws-backend-core",
     "modules:ws-backend",
+    "modules:ws-chat",
     "modules:ws-gateway",
 )

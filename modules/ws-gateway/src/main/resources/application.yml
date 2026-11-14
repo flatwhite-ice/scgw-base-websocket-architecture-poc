@@ -8,13 +8,21 @@ spring:
     gateway:
       server:
         webflux:
-          # 라우트 정의(RouteDefinition). 기본은 discovery: Spring Cloud LoadBalancer가 backend 인스턴스마다
-          # upstream 목적지를 나눈다. 고정 URI(ClusterIP, 실험 E3)는 `static` 프로필(application-static.yml)을 쓴다.
+          # 라우트 정의(RouteDefinition). 경로로 서비스를 고른다(D18). 각 서비스 안에서는 discovery로
+          # Spring Cloud LoadBalancer가 인스턴스마다 upstream 목적지를 나눈다.
+          # 고정 URI(ClusterIP, 실험 E3)는 `static` 프로필(application-static.yml)을 쓴다.
+          # 경로가 서로 겹치지 않게 적는다(겹치면 order에 따라 결과가 바뀐다). 어느 라우트에도 맞지 않는 경로는 404다.
           routes:
+            # echo/push 서비스
             - id: ws-backend
               uri: lb:ws://ws-backend
               predicates:
-                - Path=/ws/**
+                - Path=/ws/echo,/ws/push
+            # 채팅 서비스. /ws/chat 자신도 매칭된다(PathPattern의 /**는 0개 이상의 세그먼트).
+            - id: ws-chat
+              uri: lb:ws://ws-chat
+              predicates:
+                - Path=/ws/chat/**
           httpclient:
             # upstream(gateway -> ws-backend) Reactor Netty 클라이언트 튜닝.
             connect-timeout: 2000
@@ -28,13 +36,15 @@ spring:
       eager-load:
         # 서비스별 LoadBalancer child context를 기동 시점에 만든다. 그러지 않으면 첫 요청 때 Netty event loop에서
         # 지연 생성되어(class 파일 파싱, BlockHound가 검출) 첫 핸드셰이크가 멈칫한다.
-        clients: ws-backend
+        clients: ws-backend, ws-chat
     discovery:
       client:
         simple:
           instances:
             ws-backend:
               - uri: http://localhost:8081
+            ws-chat:
+              - uri: http://localhost:8084
 server:
   port: 8082
   shutdown: graceful

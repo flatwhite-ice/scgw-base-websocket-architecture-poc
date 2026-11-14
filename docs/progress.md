@@ -84,10 +84,22 @@
 - `GatewayDrainTest`를 추가했다. `./gradlew build` 통과(20 suites, 실패 0), gateway 테스트 8회 반복에서 실패 0
 - 실제 프로세스: 게이트웨이에 SIGTERM을 보내자 클라이언트 2개가 지터 시점에 1001을 받았고, backend 세션도 정리됐다.
 
+### 백엔드 서비스 2개 + 경로 라우팅 (2026-11-15)
+- 공통 런타임을 `ws-backend-core`로 분리했다(decisions D17). 기존 테스트는 import만 바꿔 그대로 통과했다.
+- 채팅 서비스 `ws-chat`(relay 8084 / direct 8085, `/ws/chat`)을 추가했다. 게이트웨이는 `/ws/echo`, `/ws/push` → ws-backend, `/ws/chat/**` → ws-chat으로 보낸다(D18).
+- `./gradlew build` 통과
+  - 새 테스트: `ChatTest` 5개, `WsChatApplicationTests`, `GatewayE2ETest`에 라우팅 2개(서비스별 분기, 미라우팅 404), `RouteDefinitionTest` 2개 라우트 검증
+- 실제 프로세스(1808x 포트, bootJar 5개: auth, ws-backend relay, ws-chat relay·direct, gateway)
+  - `java scripts/WsSmoke.java http://localhost:18080 ws://localhost:18082 ws://localhost:18085` → **ALL OK**
+  - websocat: 게이트웨이 `/ws/echo` 응답은 `server=ws-backend@...:18081`, `/ws/chat` 응답은 `server=ws-chat@...:18084`. 두 사용자 채팅 전달 확인
+  - curl: `/ws/echo`, `/ws/chat`, `/ws/chat/room1` 미인증 401, `/ws/unknown` 404
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
 - 500 에러 로그에 요청 URI의 `ticket`이 그대로 남는 문제 해결. 에러 핸들러 커스터마이즈가 필요하다(decisions D11).
 - M5: relay backend의 ingress를 ws-gateway로만 제한하는 NetworkPolicy. gateway 모드는 헤더를 신뢰하기 때문이다(decisions D8).
 - K8s 파드 IP 디스커버리(Spring Cloud Kubernetes 또는 headless Service)는 M5에서 붙인다.
-- M4 메트릭(`ws.sessions.active` 등) 연결. `SessionRegistry.activeCount`와 `WsSessionHandler.droppedPushMessages`가 이미 준비되어 있다.
+- M4 메트릭(`ws.sessions.active` 등) 연결. `SessionRegistry.activeCount`와 `ManagedWsHandler.droppedMessages`가 이미 준비되어 있다. 서비스(ws-backend, ws-chat)별 태그를 붙인다.
+- ws-chat 인스턴스 간 방 fan-out(Redis pub/sub 등). 지금은 방이 인스턴스 로컬이라 여러 대를 띄우면 방이 쪼개진다(decisions D18).
+- M4 compose / M5 매니페스트에 ws-chat 추가(스펙의 "ws-backend x2"와 별도 서비스).

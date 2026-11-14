@@ -22,7 +22,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** 클라이언트 -> ws-gateway(SCG, JWT 검증) -> ws-backend(gateway 인증 모드): relay 구조 전체 경로. */
+/**
+ * 클라이언트 -> ws-gateway(SCG, JWT 검증) -> ws-backend / ws-chat(gateway 인증 모드): relay 구조 전체 경로.
+ * 게이트웨이는 경로로 서비스를 고른다(`/ws/echo`, `/ws/push` -> ws-backend, `/ws/chat` 이하 -> ws-chat).
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(GatewayE2ETest.TestAuthConfig::class)
 class GatewayE2ETest(
@@ -40,6 +43,7 @@ class GatewayE2ETest(
         fun backend(registry: DynamicPropertyRegistry) {
             registry.add("ws.gateway.auth.jwks-uri") { "" }
             registry.add("spring.cloud.discovery.client.simple.instances.ws-backend[0].uri") { "http://localhost:${RelayBackend.port}" }
+            registry.add("spring.cloud.discovery.client.simple.instances.ws-chat[0].uri") { "http://localhost:${RelayChat.port}" }
         }
     }
 
@@ -51,7 +55,10 @@ class GatewayE2ETest(
     ) = URI.create("ws://localhost:$port$path$query")
 
     @BeforeEach
-    fun reset() = RelayBackend.seen.clear()
+    fun reset() {
+        RelayBackend.seen.clear()
+        RelayChat.seen.clear()
+    }
 
     @Test
     fun `echo is relayed to the backend with the authenticated identity`() =
@@ -111,6 +118,7 @@ class GatewayE2ETest(
             assertTrue(noCreds.message.orEmpty().contains("401"), "unexpected error: $noCreds")
             assertTrue(badTicket.message.orEmpty().contains("401"), "unexpected error: $badTicket")
             assertEquals(emptyList(), RelayBackend.seen, "backend must not see rejected handshakes")
+            assertEquals(emptyList(), RelayChat.seen)
         }
 
     @Test
@@ -179,6 +187,48 @@ class GatewayE2ETest(
             val conn = client.connect(gw("/ws/echo", "?ticket=${TestKeys.ticket("frank", sessionTtl = Duration.ofSeconds(2))}"))
 
             assertEquals(3000, conn.awaitClose(Duration.ofSeconds(6)).code)
+        }
+
+    @Test
+    fun `chat path is routed to ws-chat and echo path to ws-backend`() =
+        runBlocking {
+            val alice = client.connect(gw("/ws/chat", "?ticket=${TestKeys.ticket("alice")}"))
+            val bob = client.connect(gw("/ws/chat", "?ticket=${TestKeys.ticket("bob")}"))
+            for (conn in listOf(alice, bob)) {
+                conn.sendJson("type" to "join", "room" to "lobby")
+                assertEquals("joined", conn.nextJson()["type"].asString())
+            }
+
+            alice.sendJson("type" to "say", "room" to "lobby", "text" to "via-gateway")
+
+            for (conn in listOf(alice, bob)) {
+                val msg = conn.nextJson()
+                assertEquals("alice", msg["from"].asString())
+                assertEquals("via-gateway", msg["text"].asString())
+                assertTrue(msg["server"].asString().startsWith("ws-chat@"), "server=${msg["server"]}")
+                assertTrue(msg["server"].asString().endsWith(":${RelayChat.port}"), "server=${msg["server"]}")
+            }
+            assertEquals(2, RelayChat.seen.size)
+            assertEquals(listOf("alice", "bob"), RelayChat.seen.map { it.headers.getFirst(GatewayHeaders.USER_ID) })
+            assertEquals(emptyList(), RelayBackend.seen, "chat handshakes must not reach ws-backend")
+
+            val echo = client.connect(gw("/ws/echo", "?ticket=${TestKeys.ticket("carol")}"))
+            echo.sendJson("type" to "echo", "id" to "r1")
+            assertTrue(echo.nextJson()["server"].asString().startsWith("ws-backend@"))
+            assertEquals(1, RelayBackend.seen.size)
+            assertEquals(2, RelayChat.seen.size, "echo handshakes must not reach ws-chat")
+            listOf(alice, bob, echo).forEach { it.close() }
+        }
+
+    @Test
+    fun `ws path without a route gets 404 and reaches no service`() =
+        runBlocking {
+            // 매칭되는 라우트가 없으면 GlobalFilter(WsAuthFilter)도 실행되지 않는다: 자격증명이 있어도 404.
+            val error = assertFailsWith<Exception> { client.connect(gw("/ws/unknown", "?ticket=${TestKeys.ticket("gus")}")) }
+
+            assertTrue(error.message.orEmpty().contains("404"), "unexpected error: $error")
+            assertEquals(emptyList(), RelayBackend.seen)
+            assertEquals(emptyList(), RelayChat.seen)
         }
 
     @Test

@@ -10,7 +10,7 @@ import org.springframework.test.context.ActiveProfiles
 import java.net.URI
 import kotlin.test.assertEquals
 
-/** application.yml / application-static.yml의 라우트 정의가 의도한 대상으로 바인딩되는지 확인한다. */
+/** application.yml / application-static.yml의 라우트 정의가 서비스별로 의도한 대상에 바인딩되는지 확인한다. */
 class RouteDefinitionTest {
     @Nested
     @SpringBootTest(properties = ["ws.gateway.auth.jwks-uri="])
@@ -19,29 +19,36 @@ class RouteDefinitionTest {
         @Autowired val routes: RouteLocator,
     ) {
         @Test
-        fun `default route goes through the load balancer`() {
-            assertEquals(URI.create("lb:ws://ws-backend"), routes.wsBackendUri())
+        fun `each service is reached through the load balancer`() {
+            assertEquals(
+                mapOf("ws-backend" to URI.create("lb:ws://ws-backend"), "ws-chat" to URI.create("lb:ws://ws-chat")),
+                routes.uris(),
+            )
         }
     }
 
     @Nested
-    @SpringBootTest(properties = ["ws.gateway.auth.jwks-uri=", "WS_BACKEND_URI=ws://backend-vip:8081"])
+    @SpringBootTest(
+        properties = ["ws.gateway.auth.jwks-uri=", "WS_BACKEND_URI=ws://backend-vip:8081", "WS_CHAT_URI=ws://chat-vip:8084"],
+    )
     @Import(WsGatewayApplicationTests.Keys::class)
     @ActiveProfiles("static")
     inner class Static(
         @Autowired val routes: RouteLocator,
     ) {
         @Test
-        fun `static profile routes to a fixed uri`() {
-            assertEquals(URI.create("ws://backend-vip:8081"), routes.wsBackendUri())
+        fun `static profile routes each service to a fixed uri`() {
+            assertEquals(
+                mapOf("ws-backend" to URI.create("ws://backend-vip:8081"), "ws-chat" to URI.create("ws://chat-vip:8084")),
+                routes.uris(),
+            )
         }
     }
 }
 
 // 테스트 스레드(논블로킹 스레드 아님)에서 실행되므로 block()을 써도 BlockHound에 걸리지 않는다.
-private fun RouteLocator.wsBackendUri(): URI =
+private fun RouteLocator.uris(): Map<String, URI> =
     routes
         .collectList()
         .block()!!
-        .single { it.id == "ws-backend" }
-        .uri
+        .associate { it.id to it.uri }

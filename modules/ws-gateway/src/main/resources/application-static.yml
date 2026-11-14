@@ -1,4 +1,4 @@
-# 고정 URI 하나로 보내는 라우트(실험 E3: K8s ClusterIP VIP 경유 시 포트 고갈 재현).
+# 서비스마다 고정 URI 하나로 보내는 라우트(실험 E3: K8s ClusterIP VIP 경유 시 포트 고갈 재현).
 # 리스트 프로퍼티는 프로필에서 항목 단위로 병합되지 않고 통째로 교체되므로 라우트 전체를 다시 정의한다.
 spring:
   cloud:
@@ -9,4 +9,8 @@ spring:
             - id: ws-backend
               uri: ${WS_BACKEND_URI:ws://localhost:8081}
               predicates:
-                - Path=/ws/**
+                - Path=/ws/echo,/ws/push
+            - id: ws-chat
+              uri: ${WS_CHAT_URI:ws://localhost:8084}
+              predicates:
+                - Path=/ws/chat/**

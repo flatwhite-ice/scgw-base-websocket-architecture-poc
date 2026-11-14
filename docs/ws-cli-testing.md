@@ -1,6 +1,7 @@
 # CLI로 WebSocket 테스트하기 (websocat)
 
 게이트웨이(relay)와 direct 경로에 WebSocket을 연결해 수동으로 확인하는 명령어 모음이다.
+WebSocket 서비스는 두 개다: **ws-backend**(echo/push)와 **ws-chat**(방 단위 채팅). 게이트웨이가 경로로 서비스를 고른다.
 아래 명령은 websocat 1.14.1 / macOS 기준으로 실제 실행해 결과를 확인했다(2026-11-15).
 
 ## 1. 준비
@@ -21,12 +22,17 @@ websocat --version        # websocat 1.14.1
 | auth-api | 8080 | `./gradlew :modules:auth-api:bootRun` |
 | ws-backend (relay, 기본값) | 8081 | `./gradlew :modules:ws-backend:bootRun` |
 | ws-gateway | 8082 | `./gradlew :modules:ws-gateway:bootRun` |
+| ws-chat (relay, 기본값) | 8084 | `./gradlew :modules:ws-chat:bootRun` |
 | ws-backend (direct, 선택) | 8083 | `./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'` |
+| ws-chat (direct, 선택) | 8085 | `./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'` |
 
 - 경로 구성
-  - relay: 클라이언트 → **8082(gateway)** → 8081(backend)
-  - direct: 클라이언트 → **8083(backend)**
-- relay backend(8081)는 게이트웨이가 넣어 준 헤더를 신뢰한다. 따라서 클라이언트는 항상 8082로 접속한다.
+  - relay: 클라이언트 → **8082(gateway)** → 경로에 따라
+    - `/ws/echo`, `/ws/push` → 8081(ws-backend)
+    - `/ws/chat`, `/ws/chat/...` → 8084(ws-chat)
+    - 그 외 `/ws/...` → 게이트웨이가 404
+  - direct: 클라이언트 → **8083(ws-backend)** 또는 **8085(ws-chat)**
+- relay 인스턴스(8081, 8084)는 게이트웨이가 넣어 준 헤더를 신뢰한다. 따라서 클라이언트는 항상 8082로 접속한다.
 
 ## 2. 토큰과 티켓 발급
 
@@ -156,25 +162,86 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 # → 401
 ```
 
-## 5. direct 경로 비교
+## 5. 경로별 라우팅: ws-chat
 
-backend를 `direct` 프로필(8083)로 띄운 뒤 **포트만 바꿔** 같은 명령을 쓴다.
+같은 게이트웨이(8082)에서 경로만 `/ws/chat`으로 바꾸면 ws-chat으로 연결된다. 응답의 `server` 필드로 어느 서비스가 처리했는지 보인다.
+
+### 프로토콜
+
+| 보내는 메시지 | 받는 메시지 |
+|---|---|
+| `{"type":"join","room":"lobby"}` | `{"type":"joined","room":"lobby","userId":...,"members":<방 인원>,"server":...}` |
+| `{"type":"say","room":"lobby","text":"hi"}` | 방의 모든 멤버(보낸 사람 포함)에게 `{"type":"message","room":"lobby","from":...,"text":"hi","srvTs":...,"server":...}` |
+| `{"type":"leave","room":"lobby"}` | `{"type":"left","room":"lobby","server":...}` |
+
+- join하지 않은 방에 say하면 `{"type":"error","reason":"not joined"}`, room이 없으면 `"room required"`다. 오류 형식은 ws-backend와 같다(`invalid json`, `unknown type`).
+- 연결이 끊기면 들어가 있던 방에서 자동으로 나간다.
+- 방은 ws-chat **인스턴스 안에서만** 공유된다. ws-chat을 여러 대 띄우면 같은 방 이름이라도 인스턴스마다 따로다(decisions D18).
+
+### 두 사용자 채팅
+
+터미널 두 개를 쓴다. 각자 토큰을 받고, 연결할 때마다 새 티켓을 쓴다.
+
+```bash
+# 터미널 1 (u2): 방에 들어가서 기다린다
+T2=$(curl -s -X POST localhost:8080/auth/token -H 'content-type: application/json' -d '{"userId":"u2"}' | jq -r .token)
+websocat "ws://localhost:8082/ws/chat?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $T2" | jq -r .ticket)"
+{"type":"join","room":"lobby"}
+# → {"type":"joined","room":"lobby","userId":"u2","members":1,"server":"ws-chat@<host>:8084"}
+
+# 터미널 2 (u1): 같은 방에 들어가서 말한다
+websocat "ws://localhost:8082/ws/chat?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
+{"type":"join","room":"lobby"}
+# → {"type":"joined","room":"lobby","userId":"u1","members":2,"server":"ws-chat@<host>:8084"}
+{"type":"say","room":"lobby","text":"hi"}
+# → {"type":"message","room":"lobby","from":"u1","text":"hi","srvTs":...,"server":"ws-chat@<host>:8084"}
+#   터미널 1에도 같은 message가 도착한다
+```
+
+### 라우팅 확인
+
+```bash
+# 같은 게이트웨이, 경로만 다르다: server 필드가 서비스마다 다르다
+echo '{"type":"echo","id":"1"}' | websocat -n1 "ws://localhost:8082/ws/echo?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
+# → {"type":"echo","id":"1",...,"server":"ws-backend@<host>:8081"}
+
+# 라우트가 없는 경로 → 게이트웨이가 404 (인증 필터도 실행되지 않는다)
+websocat -n1 "ws://localhost:8082/ws/unknown?ticket=$(curl -s -X POST localhost:8080/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
+# → websocat: WebSocketError: ... Received unexpected status code (404 Not Found)
+
+# curl로 보면: 라우트가 있는 경로는 미인증 401, 없는 경로는 404
+for p in /ws/echo /ws/chat /ws/chat/room1 /ws/unknown; do
+  printf '%s ' $p; curl -s -o /dev/null -w '%{http_code}\n' -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' localhost:8082$p
+done
+# → /ws/echo 401, /ws/chat 401, /ws/chat/room1 401, /ws/unknown 404
+```
+
+## 6. direct 경로 비교
+
+서비스를 `direct` 프로필(ws-backend 8083, ws-chat 8085)로 띄운 뒤 **포트만 바꿔** 같은 명령을 쓴다.
 
 ```bash
 echo '{"type":"echo","id":"d1"}' | websocat -n -1 ws://localhost:8083/ws/echo -H "Authorization: Bearer $TOKEN"
+websocat ws://localhost:8085/ws/chat -H "Authorization: Bearer $TOKEN"
 ```
 
-## 6. 자동 스모크 테스트 (websocat 불필요)
+direct 서비스는 자기 엔드포인트만 가진다. 예를 들어 8085에 `/ws/echo`로 연결하면, 인증은 통과하지만 핸들러가 없어 404다.
 
-JDK만으로 echo, push, 티켓 재사용 401, 미인증 401을 한 번에 확인한다.
+## 7. 자동 스모크 테스트 (websocat 불필요)
+
+JDK만으로 한 번에 확인한다. 주소마다 그 주소가 제공하는 서비스만 검사한다(핸드셰이크가 404면 건너뛴다).
+- ws-backend: echo, push, 티켓 재사용 401, 미인증 401, 응답 `server`가 `ws-backend@`
+- ws-chat: 두 연결의 join → say 전달, 미인증 401, 응답 `server`가 `ws-chat@`
+- 라우트가 없는 `/ws/unknown` → 404
 
 ```bash
-java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082                       # relay만
-java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083   # relay + direct
+java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082                                             # relay만(두 서비스 + 라우팅)
+java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083 ws://localhost:8085     # relay + direct 둘
 # → ALL OK
 ```
 
-## 7. 참고: 서버가 연결을 닫는 경우
+## 8. 참고: 서버가 연결을 닫는 경우
 
 모두 RFC 6455 §7.4 기준 코드다. 이 범위의 코드만 Spring Cloud Gateway를 거쳐도 그대로 전달된다(decisions D13, D14).
 
@@ -182,10 +249,10 @@ java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localho
 |---|---|---|---|
 | 3000 | §7.4.2 애플리케이션 범위 (IANA 이름 Unauthorized) | 토큰 만료. access token 만료 시각에 닫힌다. 티켓으로 연결해도 원래 access token 기준이다 | 토큰을 재발급한 뒤 재연결 |
 | 3008 | §7.4.2 애플리케이션 범위 (IANA 이름 Timeout) | heartbeat 타임아웃. 서버 ping에 pong이 연속 2회 없으면 닫힌다. websocat은 pong을 자동으로 보내므로 유지된다 | 재연결 |
-| 1001 | §7.4.1 Going Away | 서버 종료/배포(drain). backend나 gateway에 SIGTERM이 오면 20초 window 안에 지터를 두고 닫힌다 | 백오프와 지터를 두고 재연결 |
+| 1001 | §7.4.1 Going Away | 서버 종료/배포(drain). ws-backend, ws-chat, gateway에 SIGTERM이 오면 20초 window 안에 지터를 두고 닫힌다 | 백오프와 지터를 두고 재연결 |
 
 relay 경로에서 backend가 비정상 종료되면(프로세스 강제 종료 등), 클라이언트는 코드 없는 close 프레임(1005)을 받는다. direct 경로에서는 같은 상황이 close 프레임 없는 연결 끊김(1006)으로 보인다.
 
 핸드셰이크 인증 실패는 close code가 아니라 업그레이드 전에 HTTP 401로 응답한다.
 
-이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `GatewayE2ETest`). websocat 1.14.1은 close code를 보여 주지 않는다. `-v`를 붙여도 `Received WebSocket close message`만 출력된다. gateway에 SIGTERM을 보내 확인했으며, 20초 window 안에서 세션이 닫히는 것까지는 보인다.
+이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `GatewayE2ETest`). 세션 수명 관리는 ws-backend-core 공통이라 ws-chat도 같다. websocat 1.14.1은 close code를 보여 주지 않는다. `-v`를 붙여도 `Received WebSocket close message`만 출력된다. gateway에 SIGTERM을 보내 확인했으며, 20초 window 안에서 세션이 닫히는 것까지는 보인다.
