@@ -47,7 +47,7 @@ ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway'
   - `GatewayHeaders`: `X-User-Id`, `X-Scopes`, `X-Auth-Exp`.
   - `TicketMasking`.
 - **auth-api**: `/auth/token`, `/auth/ws-ticket` (requires a Bearer access token; the ticket carries a `sexp` claim with the access token's expiry, which bounds the WS session), and `/.well-known/jwks.json`.
-- **ws-backend**: `WsHandshakeAuthFilter` rejects with 401, or 503 while draining, **before the upgrade**. It passes the principal on via `exchange.mutate().principal()`, and the handler reads `HandshakeInfo.principal`. `WsSessionHandler` runs each session as a coroutine:
+- **ws-backend**: endpoints are `WebSocketHandler` beans annotated `@WsEndpoint("/ws/...")` (class or `@Bean` method); `WsEndpointHandlerMapping` collects them at startup and fails fast on duplicates (D16). Raw WebSocket in WebFlux has no `@RequestMapping` model, and STOMP is Servlet-only. `WsHandshakeAuthFilter` rejects with 401, or 503 while draining, **before the upgrade**. It passes the principal on via `exchange.mutate().principal()`, and the handler reads `HandshakeInfo.principal`. `WsSessionHandler` runs each session as a coroutine:
   - the bounded outbound `Channel` drops push messages when full
   - echo/subscribe JSON protocol
   - heartbeat timeout closes with 3008 (Timeout)

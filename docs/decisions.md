@@ -205,3 +205,15 @@
 - **대상 전환:** 기본 `application.yml`은 `lb:ws://ws-backend`(discovery). `static` 프로필(`application-static.yml`)은 `${WS_BACKEND_URI:ws://localhost:8081}`로 보낸다.
   - 주의: 리스트 프로퍼티는 프로필 사이에서 항목 단위로 병합되지 않고 **통째로 교체**된다. 그래서 `routes[0].uri`만 덮어쓰면 id·predicates가 사라진다. static 프로필은 라우트 전체를 다시 정의한다.
 - **검증:** `RouteDefinitionTest`가 두 경우의 바인딩 결과(uri)를 확인하고, `GatewayE2ETest`/`GatewayDrainTest`가 YAML 라우트로 실제 relay를 확인한다.
+
+## D16. WebSocket 엔드포인트를 `@WsEndpoint`로 등록
+
+- **변경:** `WsConfig`에 경로를 직접 적던 `SimpleUrlHandlerMapping` 빈을 없앴다. 대신 `WebSocketHandler` 빈에 `@WsEndpoint("/ws/...")`를 붙이면 `WsEndpointHandlerMapping`이 기동 시점에 모아서 등록한다.
+  - 붙이는 위치: `WebSocketHandler`를 구현한 클래스, 또는 `@Bean` 메서드. echo와 push는 같은 `WsSessionHandler`를 설정만 달리 쓰므로 `@Bean` 메서드에 붙였다.
+  - 잘못된 구성(WebSocketHandler가 아닌 빈, 경로 없음, 경로 중복)은 기동 시점에 실패한다(`WsEndpointHandlerMappingTest`).
+- **왜 `@RequestMapping`/`@MessageMapping`이 아닌가:**
+  - WebFlux의 순수 WebSocket에는 어노테이션 매핑 모델이 없다. URL 매핑은 업그레이드 때 한 번뿐이고, 연결 안의 메시지 분기(`type`)는 핸들러가 직접 한다.
+  - STOMP `@MessageMapping`은 Servlet 스택 전용이라 쓸 수 없다(MVC 금지).
+  - RSocket `@MessageMapping`은 WebFlux에서 되지만 와이어 프로토콜이 바뀌어 PoC 측정 대상이 달라진다.
+- **매핑 순서:** order `-1`로 어노테이션 컨트롤러(order 0)보다 먼저 본다. 이전과 같다.
+

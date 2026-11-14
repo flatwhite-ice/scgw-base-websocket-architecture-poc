@@ -4,6 +4,8 @@ import com.example.wspoc.auth.common.JwksKeySource
 import com.example.wspoc.auth.common.JwtVerifier
 import com.example.wspoc.auth.common.KeySource
 import com.example.wspoc.auth.common.TicketReplayGuard
+import com.example.wspoc.backend.endpoint.WsEndpoint
+import com.example.wspoc.backend.endpoint.WsEndpointHandlerMapping
 import com.example.wspoc.backend.session.ServerIdentity
 import com.example.wspoc.backend.session.SessionRegistry
 import com.example.wspoc.backend.session.SessionScope
@@ -12,13 +14,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.springframework.beans.factory.DisposableBean
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.web.reactive.HandlerMapping
-import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping
 import org.springframework.web.reactive.socket.server.WebSocketService
 import org.springframework.web.reactive.socket.server.support.HandshakeWebSocketService
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter
@@ -30,6 +31,7 @@ import tools.jackson.databind.json.JsonMapper
 @EnableConfigurationProperties(WsProperties::class)
 class WsConfig {
     @Bean
+    @WsEndpoint("/ws/echo")
     fun echoHandler(
         props: WsProperties,
         registry: SessionRegistry,
@@ -39,6 +41,7 @@ class WsConfig {
     ) = WsSessionHandler(props, registry, scope, jsonMapper, serverIdentity, autoSubscribe = false)
 
     @Bean
+    @WsEndpoint("/ws/push")
     fun pushHandler(
         props: WsProperties,
         registry: SessionRegistry,
@@ -47,11 +50,9 @@ class WsConfig {
         serverIdentity: ServerIdentity,
     ) = WsSessionHandler(props, registry, scope, jsonMapper, serverIdentity, autoSubscribe = true)
 
+    /** `@WsEndpoint`가 붙은 WebSocketHandler 빈을 모두 모아 경로를 등록한다. */
     @Bean
-    fun wsHandlerMapping(
-        echoHandler: WsSessionHandler,
-        pushHandler: WsSessionHandler,
-    ): HandlerMapping = SimpleUrlHandlerMapping(mapOf("/ws/echo" to echoHandler, "/ws/push" to pushHandler), -1)
+    fun wsEndpointHandlerMapping(beanFactory: ListableBeanFactory) = WsEndpointHandlerMapping.from(beanFactory)
 
     @Bean
     fun webSocketService(props: WsProperties): WebSocketService {
