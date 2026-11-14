@@ -29,6 +29,8 @@ Stack: JDK 25 (Temurin, installed at `~/Library/Java/JavaVirtualMachines/temurin
 java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083   # JDK-only E2E smoke
 ```
 
+For manual websocat/curl commands (tokens, tickets, echo/push, 401 and spoofing checks), see `docs/ws-cli-testing.md`.
+
 ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway's default target. In that mode it trusts the injected headers, so it must only be reachable through the gateway. The `direct` profile switches to self mode on :8083 with JWKS. The JWKS bean only exists in self mode with a non-blank URI.
 
 ## Architecture
