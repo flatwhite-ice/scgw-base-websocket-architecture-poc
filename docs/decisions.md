@@ -141,21 +141,52 @@
 - gateway는 응답에 자기 정보를 넣지 않는다. 프레임을 파싱하고 수정하면 relay 홉의 비용이 늘어서, 측정하려는 대상(H5)이 왜곡된다.
 - 비용: push 메시지 크기가 약 40B 늘어난다. E2에서는 payloadBytes(256B) 외의 오버헤드로 감안한다.
 
-## D13. close code를 IANA 등록 코드로 통일
+## D13. close code는 RFC 6455 §7.4 기준
 
-| 용도 | 이전 | 현재 | IANA 등록 정보 |
-|---|---|---|---|
-| 토큰 만료 | 4401 (private use) | **3000 Unauthorized** | 3000번대, First Come First Served, 2021-09-06 |
-| heartbeat 타임아웃 | 4408 (private use) | **3008 Timeout** | 3000번대, First Come First Served, 2024-02-01 |
-| drain(종료/배포) | 1001 Going Away | **1012 Service Restart** | 1000번대, 2025-07-30 갱신 |
+**최종 결정**(사용자 결정): 서버가 보내는 모든 close code를 RFC 6455 §7.4에 맞춘다. 근거로 삼은 RFC 원문은 rfc-editor.org의 `rfc6455.txt`다.
 
-- 근거는 IANA WebSocket Close Code Number Registry(`https://www.iana.org/assignments/websocket/websocket.xml`, 2026-10-05 갱신본)를 직접 확인한 결과다.
-- **스펙 편차:** handoff §5.3은 토큰 만료 4401, drain 1001을 지정한다. 아래 이유로 사용자 결정에 따라 변경했다.
-- **이유**
-  - 4000–4999는 누구나 임의로 쓰는 private use 구간이다. 다른 WS 프로토콜과 같은 숫자가 다른 의미로 쓰일 수 있다. 예를 들어 graphql-ws의 4408은 "초기화 타임아웃"이다.
-  - 등록 코드는 레지스트리에 이름이 있어서 코드만 보고도 의미를 짐작할 수 있다.
-  - 이 시스템에서 핸드셰이크 인증 실패는 업그레이드 전 HTTP 401로 처리한다. 따라서 3000은 "세션 중 토큰 만료" 하나로만 쓰이고 의미가 모호하지 않다.
-  - 1012는 "재시작 중이니 다시 연결하라"는 뜻이라, 롤링 배포의 drain에는 1001(Going Away, 브라우저 이탈도 포함하는 범용 코드)보다 의도가 정확하다. E4의 재연결 정책도 이 코드를 기준으로 짠다.
-- **한계:** 3000과 3008은 개인이 등록한 코드이고 참조 문서가 없다. 의미 정의가 명확하지 않으므로, 클라이언트 동작은 여전히 우리가 문서화해야 한다(`docs/ws-cli-testing.md` §7).
-- **검증:** backend 테스트(Self, Gateway mode, Heartbeat, Drain)와 gateway E2E로 3000/3008/1012를 확인했다. backend가 보낸 3000이 SCG를 거쳐 클라이언트에 그대로 도달하는 것도 확인했다.
-- **추가 후보:** 1014(Bad Gateway)는 relay에서 backend가 비정상 종료됐을 때 gateway가 보낼 코드로 의미가 맞다. SCG가 현재 어떤 코드를 전달하는지는 E4에서 확인한다.
+| 용도 | 코드 | RFC 6455 근거 |
+|---|---|---|
+| 토큰 만료 | **3000** | §7.4.2 "3000-3999 … reserved for use by libraries, frameworks, and applications … registered directly with IANA" (IANA 이름 Unauthorized) |
+| heartbeat 타임아웃 | **3008** | §7.4.2 동일 (IANA 이름 Timeout) |
+| drain(종료/배포) | **1001** Going Away | §7.4.1 "an endpoint is "going away", such as a server going down" |
+| (방어 코드) principal 없는 세션 | 1008 Policy Violation | §7.4.1 |
+
+- **규칙:** 서버가 보내는 코드는 §7.4.1에서 프레임에 실을 수 있는 코드(1000–1003, 1007–1011) 또는 §7.4.2 애플리케이션 범위(3000–4999)만 쓴다.
+  - 모든 코드는 `CloseCodes` 한 곳에 정의한다.
+  - `CloseCodesRfc6455Test`가 이 규칙을 검증한다.
+- **이 기준이 필요한 이유:** SCG가 relay할 때 그대로 전달하는 집합과 정확히 같기 때문이다(D14). 이 범위를 벗어나면 relay 클라이언트는 1002 Protocol error를 받는다.
+- **변경 이력**
+  1. handoff 스펙대로 4401, 4408, 1001
+  2. IANA 등록 코드로 통일하면서 3000, 3008, **1012** Service Restart로 변경
+  3. 실제 프로세스로 확인했더니 1012가 SCG에서 1002로 바뀌는 것을 발견했다. RFC 6455 기준으로 재정렬해 drain을 1001로 되돌렸다.
+  - 스펙(4401)과의 편차는 토큰 만료 3000 하나만 남았다.
+- **검증**
+  - 테스트: backend(Self, Gateway mode, Heartbeat, Drain), gateway E2E(3000 relay)
+  - 실제 프로세스: gateway를 거친 클라이언트가 backend drain(SIGTERM) 때 **1001**을 받는 것을 raw 소켓으로 확인했다.
+- **참고:** 1005는 테스트 클라이언트가 "close 프레임 없이 끊김"을 표시하는 데만 쓰고 전송하지 않는다. §7.4.1이 애플리케이션 표시용으로 지정한 값이다.
+
+## D14. SCG `WebsocketRoutingFilter`의 relay 동작 (5.0.4 소스와 실측)
+
+소스는 `spring-cloud-gateway-server-webflux-5.0.4-sources.jar`의 `org/springframework/cloud/gateway/filter/WebsocketRoutingFilter.java`이고, 아래 줄 번호는 이 파일 기준이다. 실측은 raw 소켓 클라이언트로 close 프레임 바이트를 직접 확인했다.
+
+1. **close code 변환(`adaptCloseStatus`, 216–253행) = RFC 6455 §7.4 원문 기준**
+
+   | backend가 보낸 코드 | 클라이언트에 전달되는 코드 |
+   |---|---|
+   | 1000–1003, 1007–1011, 3000–4999 | 그대로 |
+   | 1004–1006, 1015 (RFC가 프레임 사용을 금지) | 1002 |
+   | **1012, 1013**(주석 `// Not in RFC6455`), **1014**, 그 외 | 1002 |
+
+   - 변환은 양방향이다. 클라이언트→backend 방향에도 같은 변환이 적용된다.
+   - IANA에 나중에 추가된 1012–1014는 참조 문서가 RFC가 아니라 hybi 메일링 리스트다. 그래서 RFC 원문만 신뢰하는 보수적 해석으로 막혀 있다.
+   - 프로토콜 계층은 문제가 아니다. Netty 4.2 `isValidStatusCode`는 1007–1014를 유효로 보고, 실제로 direct 경로에서는 1012가 정상 전달됐다.
+   - 우회하려면 이 필터를 끄고(`spring.cloud.gateway.server.webflux.global-filter.websocket-routing.enabled=false`) 소스를 복사해 수정한 필터로 교체해야 한다. 익명 클래스의 private 메서드라 상속으로는 고칠 수 없다. 유지보수 부담과 실험 대상 변경 때문에 채택하지 않았다.
+2. **101 선응답**
+   - `webSocketService.handleRequest`(111행)가 클라이언트를 먼저 업그레이드한다. backend 연결(`client.execute`, 214행)은 그 뒤에 비동기로 맺는다.
+   - 그래서 backend가 drain 중(503)이거나 죽어 있으면, 클라이언트는 **101을 받은 뒤 1002로 종료**된다(실측). direct 구조라면 핸드셰이크 단계에서 503을 받는다.
+   - **E4 영향:** relay에서는 재연결 실패가 "핸드셰이크 성공 + 즉시 1002"로 보인다. 재연결 성공률과 핸드셰이크 지표를 해석할 때 구분해야 한다.
+3. **backend 비정상 종료(SIGKILL) → 클라이언트는 코드 없는 빈 close 프레임을 받는다**(JDK 클라이언트에서는 1005로 보임). 1014 Bad Gateway는 생성되지 않는다.
+   - backend가 close 프레임 없이 끊으면 `proxySession.closeStatus()`가 값 없이 끝난다. 그러면 close 전파(257–260행)가 일어나지 않고, 메시지 펌프 종료와 함께 기본 close가 나간다.
+   - direct 구조에서는 같은 상황이 close 프레임 없는 TCP 종료(클라이언트 1006)로 보인다.
+4. **메시지 중계(266–291행):** 프레임을 파싱하지 않고 `retain()`한 버퍼를 그대로 반대편 세션으로 보낸다. gateway가 응답 내용(예: D12의 `server` 필드)을 바꾸지 않는 근거다.

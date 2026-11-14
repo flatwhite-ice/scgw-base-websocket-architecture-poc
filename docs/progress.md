@@ -71,13 +71,18 @@
 - backend가 auth-api보다 먼저 뜨면 초기 JWKS 조회는 실패한다. 첫 핸드셰이크에서 미등록 kid를 보고 재조회해 정상 복구된다. 경고 로그에 예외 타입이 나오도록 개선했다.
 
 ### close code 변경 (2026-11-15)
-- 토큰 만료 4401→**3000**, heartbeat 4408→**3008**, drain 1001→**1012**로 바꿨다. 모두 IANA 등록 코드다(decisions D13).
-- 위 M2/M3 기록의 4401/4408/1001은 당시 기준 값이다. `./gradlew build`로 새 코드 전체 통과를 확인했다(18 suites, 실패 0).
-- gateway relay 시 1014(Bad Gateway) 사용 여부는 E4에서 확인하기로 하고 후속 과제에 추가했다.
+- 최종 코드는 토큰 만료 **3000**, heartbeat **3008**, drain **1001**이다. 모두 RFC 6455 §7.4 기준이다(decisions D13).
+  - 중간에 IANA 기준으로 drain을 1012로 바꿨는데, 실측해 보니 SCG가 1012를 1002로 변환했다(D14). 그래서 1001로 되돌렸다.
+  - 위 M2/M3 기록의 4401/4408은 당시 기준 값이다.
+- `CloseCodesRfc6455Test`를 추가했다. 서버가 보내는 모든 코드가 RFC 6455에 맞는지 검증한다.
+- `./gradlew build` 통과(19 suites, 실패 0)
+- 실제 프로세스: gateway를 거친 클라이언트가 backend drain 때 1001을 받는 것을 raw 소켓으로 확인했다.
+- 1014 확인 결과: relay에서 backend를 SIGKILL하면 클라이언트는 코드 없는 close 프레임을 받는다. SCG는 1014를 생성하지 않는다(D14).
 
 ## 후속 과제
-- relay에서 backend가 비정상 종료될 때 클라이언트가 받는 close code 확인. 1014 Bad Gateway가 적절하다(decisions D13).
-- gateway drain 시 relay 세션별로 1012와 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
+- E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
+- (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
+- gateway drain 시 relay 세션별로 1001과 지터를 적용해 종료하기. 지금은 신규 업그레이드를 503으로 거절하는 것까지만 한다(decisions D10).
 - 500 에러 로그에 요청 URI의 `ticket`이 그대로 남는 문제 해결. 에러 핸들러 커스터마이즈가 필요하다(decisions D11).
 - M5: relay backend의 ingress를 ws-gateway로만 제한하는 NetworkPolicy. gateway 모드는 헤더를 신뢰하기 때문이다(decisions D8).
 - K8s 파드 IP 디스커버리(Spring Cloud Kubernetes 또는 headless Service)는 M5에서 붙인다.

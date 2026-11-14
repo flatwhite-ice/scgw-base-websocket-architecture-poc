@@ -33,7 +33,7 @@ class DrainTest(
     private suspend fun uri() = URI.create("ws://localhost:$port/ws/echo?ticket=${TestKeys.ticket("drain")}")
 
     @Test
-    fun `drain closes all sessions with 1012 Service Restart within the window and rejects new handshakes with 503`() =
+    fun `drain closes all sessions with 1001 Going Away within the window and rejects new handshakes with 503`() =
         runBlocking {
             val client = WsTestClient()
             val sessions = (1..5).map { client.connect(uri()) }
@@ -44,7 +44,7 @@ class DrainTest(
 
             val rejected = assertFailsWith<Exception> { client.connect(uri()) }
             assertTrue(rejected.message.orEmpty().contains("503"), "unexpected error: $rejected")
-            sessions.forEach { assertEquals(1012, it.awaitClose(Duration.ofSeconds(2)).code) }
+            sessions.forEach { assertEquals(1001, it.awaitClose(Duration.ofSeconds(2)).code) }
             withTimeout(3_000) { done.await() }
             assertEquals(0, registry.activeCount)
         }

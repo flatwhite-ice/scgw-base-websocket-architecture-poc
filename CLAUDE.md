@@ -52,8 +52,8 @@ ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway'
   - echo/subscribe JSON protocol
   - heartbeat timeout closes with 3008 (Timeout)
   - token expiry closes with 3000 (Unauthorized)
-  - `DrainCoordinator` (SmartLifecycle) closes sessions with 1012 (Service Restart) plus jitter
-  - all close codes are IANA-registered and defined in `CloseCodes` (D13); don't introduce private 4xxx codes
+  - `DrainCoordinator` (SmartLifecycle) closes sessions with 1001 (Going Away) plus jitter
+  - all close codes live in `CloseCodes` and must be RFC 6455 §7.4-valid: 1000–1003, 1007–1011, or 3000–4999 (D13), enforced by `CloseCodesRfc6455Test`. SCG rewrites anything else (e.g. 1012–1014) to 1002 on the relay path (D14).
 - **ws-gateway**:
   - `WsAuthFilter` (GlobalFilter, highest precedence) always strips client identity headers. It authenticates upgrades only, injects headers, removes `ticket` and `Authorization`, and on a 401 never calls the chain, so no upstream connection is opened.
   - Routes come from `ws.gateway.backend.mode`: `discovery` (`lb:ws://ws-backend`) or `static` (single URI, for experiment E3).
