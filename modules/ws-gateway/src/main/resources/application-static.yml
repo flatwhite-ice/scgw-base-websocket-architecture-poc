@@ -5,12 +5,21 @@ spring:
     gateway:
       server:
         webflux:
+          # 인증 필터(WsAuth) 선언도 기본 application.yml과 같게 유지한다.
           routes:
+            - id: ws-backend-public
+              uri: ${WS_BACKEND_URI:ws://localhost:8090}
+              predicates:
+                - Path=/ws/public/**
             - id: ws-backend
               uri: ${WS_BACKEND_URI:ws://localhost:8090}
               predicates:
                 - Path=/ws/echo,/ws/push
+              filters:
+                - WsAuth
             - id: ws-chat
               uri: ${WS_CHAT_URI:ws://localhost:8091}
               predicates:
                 - Path=/ws/chat/**
+              filters:
+                - WsAuth

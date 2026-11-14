@@ -68,6 +68,9 @@ class GatewayDrainTest(
 
             val rejected = assertFailsWith<Exception> { client.connect(uri()) }
             assertTrue(rejected.message.orEmpty().contains("503"), "unexpected error: $rejected")
+            // drain 503은 전역 필터가 하므로 인증 없는 라우트에도 적용된다.
+            val anonymous = assertFailsWith<Exception> { client.connect(URI.create("ws://localhost:$port/ws/public/push")) }
+            assertTrue(anonymous.message.orEmpty().contains("503"), "unexpected error: $anonymous")
             sessions.forEach { assertEquals(1001, it.awaitClose(Duration.ofSeconds(2)).code) }
             withTimeout(3_000) { done.await() }
             assertEquals(0, relaySessions.activeCount)

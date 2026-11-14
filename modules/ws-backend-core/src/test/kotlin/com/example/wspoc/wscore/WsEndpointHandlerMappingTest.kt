@@ -6,13 +6,16 @@ import org.junit.jupiter.api.Test
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.server.PathContainer
 import org.springframework.web.reactive.socket.WebSocketHandler
 import org.springframework.web.reactive.socket.WebSocketSession
 import reactor.core.publisher.Mono
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class WsEndpointHandlerMappingTest {
     open class NoopHandler : WebSocketHandler {
@@ -33,6 +36,10 @@ class WsEndpointHandlerMappingTest {
 
         @Bean
         fun notAnEndpoint() = NoopHandler()
+
+        @Bean
+        @WsEndpoint("/ws/open", auth = WsEndpoint.Auth.NONE)
+        fun anonymous() = NoopHandler()
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -66,10 +73,21 @@ class WsEndpointHandlerMappingTest {
     fun `collects class-level and bean-method annotations`() {
         AnnotationConfigApplicationContext(Valid::class.java).use { ctx ->
             val endpoints = WsEndpointHandlerMapping.from(ctx).endpoints
-            assertEquals(setOf("/ws/a", "/ws/a2", "/ws/b"), endpoints.keys)
+            assertEquals(setOf("/ws/a", "/ws/a2", "/ws/b", "/ws/open"), endpoints.keys)
             assertSame<Any?>(ctx.getBean("classLevel"), endpoints["/ws/a"])
             assertSame<Any?>(ctx.getBean("classLevel"), endpoints["/ws/a2"])
             assertSame<Any?>(ctx.getBean("methodLevel"), endpoints["/ws/b"])
+        }
+    }
+
+    @Test
+    fun `auth NONE endpoints are reported as anonymous`() {
+        AnnotationConfigApplicationContext(Valid::class.java).use { ctx ->
+            val mapping = WsEndpointHandlerMapping.from(ctx)
+            assertEquals(setOf("/ws/open"), mapping.anonymousPaths)
+            assertTrue(mapping.isAnonymous(PathContainer.parsePath("/ws/open")))
+            assertFalse(mapping.isAnonymous(PathContainer.parsePath("/ws/b")))
+            assertFalse(mapping.isAnonymous(PathContainer.parsePath("/ws/open/x")))
         }
     }
 

@@ -101,6 +101,15 @@
   - `java scripts/WsSmoke.java http://localhost:8070 ws://localhost:18080 ws://localhost:8092 ws://localhost:8093` → **ALL OK**
   - 게이트웨이 경유 응답의 `server`: `/ws/echo`는 `ws-backend@...:8090`, `/ws/chat`은 `ws-chat@...:8091`
 
+### 게이트웨이 인증을 라우트 필터로 전환 (2026-11-15)
+- `WsAuthFilter`(전역)를 `GatewayEdgeFilter`(전역: 신원 헤더 제거, drain 503)와 라우트 필터 `WsAuth`(인증)로 나눴다. 인증 라우트는 YAML `filters: [WsAuth]`로 선언한다(decisions D20).
+- core에 `@WsEndpoint(auth = NONE)`를 추가했다. ws-backend에 익명 읽기 전용 `/ws/public/push`와 게이트웨이 라우트 `ws-backend-public`(WsAuth 없음)을 추가했다.
+- `./gradlew build` 통과(28 suites, 80 tests, 실패 0)
+  - 새 테스트: `PublicPushTest` 4개, 매핑 익명 경로 1개, `GatewayE2ETest` 2개(공개 라우트, 인증 라우트 401), `RouteDefinitionTest` WsAuth 유무 2개, `MissingAuthFilterTest`(fail-closed), drain 503의 익명 라우트 확인
+- 실제 프로세스(기본 포트 그대로: auth 8070, gateway 8080, ws-backend 8090/8092, ws-chat 8091/8093)
+  - `java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localhost:8092 ws://localhost:8093` → **ALL OK**
+  - curl 업그레이드 상태: `/ws/public/push` 101, `/ws/echo`·`/ws/push`·`/ws/chat` 401, `/ws/unknown` 404. WsAuth 라우트의 일반 `GET /ws/echo`도 401
+
 ## 후속 과제
 - E4에서 relay 재연결을 해석할 때 주의: SCG는 101을 먼저 응답한다. backend가 drain 중이거나 죽어 있으면 클라이언트는 "101 후 즉시 1002"를 받는다(decisions D14).
 - (선택) SCG에 이슈 제기: `adaptCloseStatus`가 IANA 1012–1014를 1002로 변환하는 문제(D14).
@@ -110,3 +119,4 @@
 - M4 메트릭(`ws.sessions.active` 등) 연결. `SessionRegistry.activeCount`와 `ManagedWsHandler.droppedMessages`가 이미 준비되어 있다. 서비스(ws-backend, ws-chat)별 태그를 붙인다.
 - ws-chat 인스턴스 간 방 fan-out(Redis pub/sub 등). 지금은 방이 인스턴스 로컬이라 여러 대를 띄우면 방이 쪼개진다(decisions D18).
 - M4 compose / M5 매니페스트에 ws-chat 추가(스펙의 "ws-backend x2"와 별도 서비스).
+- `WsAuth` 라우트 필터에 설정 항목 추가 검토(예: 필요한 scope). 지금은 인자 없는 `- WsAuth`다(decisions D20).

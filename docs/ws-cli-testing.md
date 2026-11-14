@@ -28,8 +28,9 @@ websocat --version        # websocat 1.14.1
 
 - 경로 구성
   - relay: 클라이언트 → **8080(gateway)** → 경로에 따라
-    - `/ws/echo`, `/ws/push` → 8090(ws-backend)
-    - `/ws/chat`, `/ws/chat/...` → 8091(ws-chat)
+    - `/ws/echo`, `/ws/push` → 8090(ws-backend), 인증 필요
+    - `/ws/chat`, `/ws/chat/...` → 8091(ws-chat), 인증 필요
+    - `/ws/public/...` → 8090(ws-backend), **인증 없음**(공개 push)
     - 그 외 `/ws/...` → 게이트웨이가 404
   - direct: 클라이언트 → **8092(ws-backend)** 또는 **8093(ws-chat)**
 - relay 인스턴스(8090, 8091)는 게이트웨이가 넣어 준 헤더를 신뢰한다. 따라서 클라이언트는 항상 8080으로 접속한다.
@@ -217,7 +218,33 @@ done
 # → /ws/echo 401, /ws/chat 401, /ws/chat/room1 401, /ws/unknown 404
 ```
 
-## 6. direct 경로 비교
+## 6. 인증 없는 공개 push
+
+`/ws/public/push`는 토큰이나 티켓 없이 연결된다. 기본 토픽(`ticker`)만 1초마다 받는 읽기 전용 엔드포인트다.
+
+```bash
+sleep 3 | websocat ws://localhost:8080/ws/public/push | head -2
+# → {"type":"push","topic":"ticker","seq":0,...,"server":"ws-backend@<host>:8090","payload":"xxx..."}
+
+# 클라이언트 메시지는 거절된다(구독 변경 불가)
+(echo '{"type":"subscribe","intervalMs":10}'; sleep 1.5) | websocat ws://localhost:8080/ws/public/push | grep error
+# → {"type":"error","reason":"read only","server":"ws-backend@<host>:8090"}
+
+# 인증 라우트는 그대로 401, 공개 라우트는 101
+for p in /ws/public/push /ws/echo /ws/push /ws/chat /ws/unknown; do
+  printf '%s ' $p; curl -s -o /dev/null -m 2 -w '%{http_code}\n' -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' localhost:8080$p
+done
+# → /ws/public/push 101, /ws/echo 401, /ws/push 401, /ws/chat 401, /ws/unknown 404
+```
+
+인증 여부는 두 곳에서 정한다(decisions D20).
+- 게이트웨이: 라우트에 `filters: [WsAuth]`가 있으면 인증한다. 없으면 인증하지 않는다. 새 라우트를 추가할 때 인증이 필요하면 반드시 선언한다.
+- 서비스: `@WsEndpoint("/ws/...", auth = WsEndpoint.Auth.NONE)`이면 익명으로 연다. 기본값은 인증 필요다.
+
+게이트웨이에서 WsAuth를 빠뜨려도 서비스의 인증 엔드포인트는 열리지 않는다(fail-closed). 다만 클라이언트에는 401 대신 핸드셰이크 실패로 보인다.
+
+## 7. direct 경로 비교
 
 서비스를 `direct` 프로필(ws-backend 8092, ws-chat 8093)로 띄운 뒤 **포트만 바꿔** 같은 명령을 쓴다.
 
@@ -228,11 +255,12 @@ websocat ws://localhost:8093/ws/chat -H "Authorization: Bearer $TOKEN"
 
 direct 서비스는 자기 엔드포인트만 가진다. 예를 들어 8093에 `/ws/echo`로 연결하면, 인증은 통과하지만 핸들러가 없어 404다.
 
-## 7. 자동 스모크 테스트 (websocat 불필요)
+## 8. 자동 스모크 테스트 (websocat 불필요)
 
 JDK만으로 한 번에 확인한다. 주소마다 그 주소가 제공하는 서비스만 검사한다(핸드셰이크가 404면 건너뛴다).
 - ws-backend: echo, push, 티켓 재사용 401, 미인증 401, 응답 `server`가 `ws-backend@`
 - ws-chat: 두 연결의 join → say 전달, 미인증 401, 응답 `server`가 `ws-chat@`
+- 공개 push(`/ws/public/push`가 101일 때만): 자격증명 없이 push 수신, 클라이언트 메시지는 `read only`
 - 라우트가 없는 `/ws/unknown` → 404
 
 ```bash
@@ -241,7 +269,7 @@ java scripts/WsSmoke.java http://localhost:8070 ws://localhost:8080 ws://localho
 # → ALL OK
 ```
 
-## 8. 참고: 서버가 연결을 닫는 경우
+## 9. 참고: 서버가 연결을 닫는 경우
 
 모두 RFC 6455 §7.4 기준 코드다. 이 범위의 코드만 Spring Cloud Gateway를 거쳐도 그대로 전달된다(decisions D13, D14).
 

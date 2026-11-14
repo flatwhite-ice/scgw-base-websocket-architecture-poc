@@ -24,7 +24,12 @@ interface WsSessionProtocol {
 /** 프로토콜이 보는 세션. 송신 큐와 수명은 [ManagedWsHandler]가 관리한다. */
 interface WsSessionContext {
     val id: String
+
+    /** 인증된 사용자. [anonymous]이면 자리표시자(`userId = "anonymous"`)다. */
     val principal: AuthPrincipal
+
+    /** `@WsEndpoint(auth = NONE)` 엔드포인트의 익명 세션인가. */
+    val anonymous: Boolean
 
     /** 이 인스턴스의 식별자(응답의 `server` 필드). */
     val serverId: String

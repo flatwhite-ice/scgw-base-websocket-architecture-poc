@@ -53,7 +53,7 @@ Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-c
   - `TicketMasking`.
 - **auth-api**: `/auth/token`, `/auth/ws-ticket` (requires a Bearer access token; the ticket carries a `sexp` claim with the access token's expiry, which bounds the WS session), and `/.well-known/jwks.json`.
 - **ws-backend-core** (library, package `com.example.wspoc.wscore`, registered by AutoConfiguration, D17): the runtime shared by every WebSocket service.
-  - Endpoints are `WebSocketHandler` beans annotated `@WsEndpoint("/ws/...")` (class or `@Bean` method). `WsEndpointHandlerMapping` collects them at startup and fails fast on duplicates (D16). Raw WebSocket in WebFlux has no `@RequestMapping` model, and STOMP is Servlet-only.
+  - Endpoints are `WebSocketHandler` beans annotated `@WsEndpoint("/ws/...")` (class or `@Bean` method). `auth = WsEndpoint.Auth.NONE` makes an anonymous endpoint: no handshake auth and no 3000 expiry, but heartbeat and drain still apply (D20). `WsEndpointHandlerMapping` collects them at startup and fails fast on duplicates (D16). Raw WebSocket in WebFlux has no `@RequestMapping` model, and STOMP is Servlet-only.
   - `WsHandshakeAuthFilter` rejects with 401, or 503 while draining, **before the upgrade**. It passes the principal on via `exchange.mutate().principal()`, and the handler reads `HandshakeInfo.principal`.
   - `ManagedWsHandler` runs each session as a coroutine and owns its lifecycle. A service supplies only a per-session `WsSessionProtocol` (`onOpen`/`onText`/`onClose`), usually a `JsonWsProtocol`, which gives every service the same `{"type":...}` dispatch and error replies. The lifecycle covers:
     - the bounded outbound `Channel`: `send` applies backpressure for replies, `trySend` drops when full for push and broadcast (counted in `droppedMessages`)
@@ -64,10 +64,12 @@ Both services default to relay (gateway auth mode): ws-backend on :8090 and ws-c
 - **ws-backend**: `EchoPushProtocol` (echo/subscribe/unsubscribe), with service settings in `PushProperties` (`ws.push`).
 - **ws-chat**: `ChatProtocol` (join/say/leave). `ChatRooms` is in-memory per instance, so multiple instances split rooms; cross-instance fan-out is a follow-up (D18).
 - **ws-gateway**:
-  - `WsAuthFilter` (GlobalFilter, highest precedence) always strips client identity headers. It authenticates upgrades only, injects headers, removes `ticket` and `Authorization`, and on a 401 never calls the chain, so no upstream connection is opened.
+  - Auth is per route (D20). `GatewayEdgeFilter` is a GlobalFilter at highest precedence and runs on every routed request: it always strips client identity headers and returns 503 to upgrades while draining. The route filter `WsAuth` (`WsAuthGatewayFilterFactory`, declared as `filters: [WsAuth]`) authenticates every request on that route, injects identity headers, and removes `ticket` and `Authorization`. On a 401 it never calls the chain, so no upstream connection is opened. Its order is pinned to Edge + 1 so stripping always runs before injection.
+  - A new route that needs auth must declare `WsAuth`. If it's forgotten, the backend still rejects (fail-closed), but the client sees a handshake failure instead of a 401.
   - Routes are declared in YAML under `spring.cloud.gateway.server.webflux.routes` (no `RouteLocator` bean, D15). There is one route per service, with non-overlapping paths (D18):
-    - `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`
-    - `Path=/ws/chat/**` → `lb:ws://ws-chat`
+    - `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`, with `WsAuth`
+    - `Path=/ws/chat/**` → `lb:ws://ws-chat`, with `WsAuth`
+    - `Path=/ws/public/**` → `lb:ws://ws-backend`, no auth (anonymous read-only push)
     - Any other `/ws/...` gets a 404 before auth, because GlobalFilters only run on matched routes.
   - When adding a service, also add it to `loadbalancer.eager-load.clients` and to the simple-discovery instances.
   - The `static` profile (`application-static.yml`) sends to `${WS_BACKEND_URI}` and `${WS_CHAT_URI}` for experiment E3. Profiles replace the whole route list, so redefine every route when overriding.

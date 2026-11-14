@@ -12,17 +12,27 @@ spring:
           # Spring Cloud LoadBalancer가 인스턴스마다 upstream 목적지를 나눈다.
           # 고정 URI(ClusterIP, 실험 E3)는 `static` 프로필(application-static.yml)을 쓴다.
           # 경로가 서로 겹치지 않게 적는다(겹치면 order에 따라 결과가 바뀐다). 어느 라우트에도 맞지 않는 경로는 404다.
+          # 인증이 필요한 라우트에는 filters에 WsAuth를 선언한다(D20). 신원 헤더 제거와 drain 503은 전역 필터가 모든 라우트에 한다.
           routes:
+            # 공개(익명) push. WsAuth가 없다. backend도 이 경로를 @WsEndpoint(auth = NONE)로 연다.
+            - id: ws-backend-public
+              uri: lb:ws://ws-backend
+              predicates:
+                - Path=/ws/public/**
             # echo/push 서비스
             - id: ws-backend
               uri: lb:ws://ws-backend
               predicates:
                 - Path=/ws/echo,/ws/push
+              filters:
+                - WsAuth
             # 채팅 서비스. /ws/chat 자신도 매칭된다(PathPattern의 /**는 0개 이상의 세그먼트).
             - id: ws-chat
               uri: lb:ws://ws-chat
               predicates:
                 - Path=/ws/chat/**
+              filters:
+                - WsAuth
           httpclient:
             # upstream(gateway -> ws-backend) Reactor Netty 클라이언트 튜닝.
             connect-timeout: 2000

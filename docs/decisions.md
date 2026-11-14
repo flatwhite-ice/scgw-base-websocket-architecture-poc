@@ -107,7 +107,7 @@
   - `static` 프로필: 고정 URI(`WS_BACKEND_URI`). ClusterIP VIP로 보내는 E3용이다.
   - D18에서 경로별 서비스 2개(ws-backend, ws-chat) 라우트로 늘렸다.
   - 로컬과 compose는 `SimpleDiscoveryClient` 정적 목록을 쓴다. K8s 파드 IP 디스커버리는 M5에서 붙인다.
-- **`WsAuthFilter`:** GlobalFilter이고 order는 HIGHEST_PRECEDENCE다.
+- **`WsAuthFilter`:** GlobalFilter이고 order는 HIGHEST_PRECEDENCE다. (D20에서 전역 `GatewayEdgeFilter`와 라우트 필터 `WsAuth`로 나눴다. 아래는 당시 구조다.)
   - 모든 요청에서 `X-User-Id`, `X-Scopes`, `X-Auth-Exp`를 제거한다.
   - Upgrade 요청에서만 인증한다.
   - 성공하면 identity 헤더를 주입하고, `ticket` 쿼리와 `Authorization` 헤더를 제거한 뒤 forward한다.
@@ -241,7 +241,7 @@
   - `ws-backend`: `Path=/ws/echo,/ws/push` → `lb:ws://ws-backend`
   - `ws-chat`: `Path=/ws/chat/**` → `lb:ws://ws-chat` (`/ws/chat` 자신도 매칭)
   - ws-backend 경로를 `/ws/**`가 아니라 **명시적인 목록**으로 적었다. 경로가 겹치지 않으면 라우트 `order`에 결과가 좌우되지 않고, 새 서비스를 추가할 때 기존 라우트를 건드리지 않아도 된다.
-  - 어느 라우트에도 맞지 않는 `/ws/...`는 게이트웨이가 404로 응답한다. GlobalFilter(`WsAuthFilter`)는 매칭된 라우트에서만 실행되므로 인증 전에 404가 나고, upstream 연결도 없다.
+  - 어느 라우트에도 맞지 않는 `/ws/...`는 게이트웨이가 404로 응답한다. GlobalFilter(당시 `WsAuthFilter`, 지금은 `GatewayEdgeFilter`)는 매칭된 라우트에서만 실행되므로 인증 전에 404가 나고, upstream 연결도 없다.
   - LoadBalancer eager-load 대상과 simple discovery 목록에 `ws-chat`을 추가했다.
 - **경로 prefix를 떼지 않는다(StripPrefix 없음):** 클라이언트가 보는 경로와 서비스의 `@WsEndpoint` 경로가 같다. 기존 `/ws/echo` 클라이언트가 그대로 동작한다.
 - **한계: 방은 인스턴스 로컬이다.** `ChatRooms`는 프로세스 메모리에 있어서 ws-chat을 여러 대 띄우면 같은 방 이름이라도 인스턴스마다 멤버가 따로다. 인스턴스 간 fan-out(Redis pub/sub 등)은 후속 과제로 둔다.
@@ -263,3 +263,22 @@
 - 스펙(handoff.md §5: auth 8080, backend 8081, gateway 8082)과 다르다. 바뀐 것은 로컬 기본 포트뿐이고, K8s에서는 Service가 포트를 정한다.
 - 바꾼 곳: 각 모듈 `application*.yml`(server.port, JWKS URI, 게이트웨이 discovery 목록과 static 기본 URI), `scripts/WsSmoke.java` 기본값, 문서. 이 문서와 progress.md의 과거 기록에 나오는 포트는 당시 값이다.
 
+## D20. 게이트웨이 인증을 라우트 필터(`WsAuth`)로 전환하고 익명 엔드포인트 추가
+
+- **배경:** 인증 없이 제공해야 하는 WebSocket이 생길 수 있다. 전역 필터는 모든 라우트를 인증하므로, 인증 여부를 라우트마다 YAML로 선언하게 바꿨다.
+  - 스펙(handoff §5.4)은 GlobalFilter `WsAuthFilter`를 명시한다. 이 결정이 그 스펙과 다른 점이다.
+- **게이트웨이 필터 두 개**
+  - `GatewayEdgeFilter`(GlobalFilter, HIGHEST_PRECEDENCE, 모든 라우트): 클라이언트 신원 헤더(`X-User-Id`, `X-Scopes`, `X-Auth-Exp`) 제거와 drain 중 업그레이드 503. 익명 라우트에서도 위조 헤더가 backend로 가면 안 되고, drain은 인스턴스 단위라서 전역에 둔다.
+  - `WsAuthGatewayFilterFactory`(라우트 필터 `WsAuth`): `routes[].filters: [WsAuth]`로 선언한 라우트만 인증한다. 검증, 신원 헤더 주입, `ticket`·`Authorization` 제거, 실패 시 chain 없이 401은 이전과 같다.
+  - **순서:** SCG는 global과 route 필터를 합쳐 order로 정렬한다. WsAuth는 `OrderedGatewayFilter(HIGHEST_PRECEDENCE + 1)`로 고정했다. 헤더 제거(Edge)가 항상 주입(WsAuth)보다 먼저 실행된다. 기본 라우트 필터 order(선언 순서 1, 2, …)에 맡기면 다른 필터와 섞일 때 순서가 흔들린다.
+  - **동작 변화:** 예전에는 Upgrade 요청만 인증했다. 이제 WsAuth 라우트는 일반 HTTP 요청도 인증한다(예: `GET /ws/echo` → 401). 인증이 필요하다고 선언한 라우트는 요청 종류와 무관하게 인증한다.
+- **라우트:** `ws-backend-public`(`/ws/public/**`, WsAuth 없음), `ws-backend`(`/ws/echo,/ws/push`, WsAuth), `ws-chat`(`/ws/chat/**`, WsAuth). static 프로필도 같다.
+- **backend 익명 엔드포인트(core):** `@WsEndpoint(paths, auth = NONE)`
+  - `WsHandshakeAuthFilter`가 그 경로의 인증을 건너뛰고 익명 principal(`WsPrincipal.anonymous()`)로 연다. 경로 판단은 핸들러 매핑과 같은 PathPattern 규칙이다.
+  - 자격증명이나 신원 헤더가 와도 쓰지 않는다. drain 503은 익명에도 적용한다.
+  - 익명 세션에는 토큰 만료 종료(3000)가 없다. heartbeat(3008)와 drain(1001)은 같다.
+  - 예시는 ws-backend `/ws/public/push`다. 읽기 전용이라 클라이언트 메시지에 `read only` 오류로 응답한다. 익명 사용자가 주기나 payload를 키워 부하를 만들지 못하게 한다.
+- **fail-closed:** 인증 엔드포인트로 가는 라우트에 WsAuth를 빠뜨려도, Edge가 신원 헤더를 지우므로 backend(gateway 모드)가 401로 거절해 세션이 열리지 않는다.
+  - `MissingAuthFilterTest`에서 확인했다. 클라이언트는 핸드셰이크 실패로 끝났고, 위조 `X-User-Id`를 보내도 backend 세션 수는 늘지 않았다.
+  - 다만 이 경우 클라이언트가 받는 응답은 backend 401이 깔끔하게 전달된 것이 아니다(SCG의 101 선응답, D14). 그래서 이것은 보조 방어선이다. 1차 방어는 라우트 선언이고, `RouteDefinitionTest`가 라우트별 WsAuth 유무를 고정한다.
+- **참고:** 서비스(direct)에서 존재하지 않는 `/ws/` 경로는 인증이 먼저라 자격증명이 없으면 401이고, 있으면 404다. 게이트웨이에서는 라우트가 없으면 항상 404다.

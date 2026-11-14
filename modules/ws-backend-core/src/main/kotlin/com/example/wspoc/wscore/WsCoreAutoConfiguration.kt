@@ -82,7 +82,8 @@ class WsCoreAutoConfiguration {
     fun wsHandshakeAuthFilter(
         authenticator: HandshakeAuthenticator,
         drainState: DrainState,
-    ) = WsHandshakeAuthFilter(authenticator, drainState)
+        endpoints: WsEndpointHandlerMapping,
+    ) = WsHandshakeAuthFilter(authenticator, drainState, endpoints)
 
     /** `@WsEndpoint`가 붙은 WebSocketHandler 빈을 모두 모아 경로를 등록한다(D16). */
     @Bean

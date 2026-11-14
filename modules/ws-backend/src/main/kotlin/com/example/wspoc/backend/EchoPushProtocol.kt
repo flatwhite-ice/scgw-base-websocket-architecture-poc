@@ -16,12 +16,16 @@ import java.time.Duration
  *  - `{"type":"echo",...}`      -> 같은 객체 + `srvTs`, `userId`(인증된 principal), `server`(이 인스턴스)
  *  - `{"type":"subscribe","topic":"ticker","intervalMs":1000,"payloadBytes":256}` -> 주기적 `push` 메시지
  *  - `{"type":"unsubscribe"}`  -> push 중지
+ *
+ * [readOnly]이면(익명 공개 엔드포인트) 기본 토픽만 고정 주기로 보내고, 클라이언트 메시지는 모두
+ * `{"type":"error","reason":"read only"}`로 거절한다. 익명 사용자가 주기나 payload를 키워 부하를 만들지 못하게 한다.
  */
 class EchoPushProtocol(
     private val push: PushProperties,
     jsonMapper: JsonMapper,
     /** `/ws/push`는 연결 즉시 기본 구독을 시작하고, `/ws/echo`는 명시적인 subscribe를 기다린다. */
     private val autoSubscribe: Boolean,
+    private val readOnly: Boolean = false,
     private val clock: Clock = Clock.systemUTC(),
 ) : JsonWsProtocol(jsonMapper) {
     private var pushJob: Job? = null
@@ -35,6 +39,10 @@ class EchoPushProtocol(
         type: String,
         node: ObjectNode,
     ): Boolean {
+        if (readOnly) {
+            reply(session, error(session, "read only"))
+            return true
+        }
         when (type) {
             "echo" -> {
                 node.put("srvTs", clock.millis())

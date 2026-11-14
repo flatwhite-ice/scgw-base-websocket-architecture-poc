@@ -221,9 +221,43 @@ class GatewayE2ETest(
         }
 
     @Test
+    fun `public route needs no credentials and never forwards identity headers`() =
+        runBlocking {
+            // WsAuth가 없는 라우트: 자격증명 없이 연결된다. 위조 신원 헤더는 전역 필터가 제거한다.
+            val spoofed = HttpHeaders().apply { set(GatewayHeaders.USER_ID, "evil") }
+            val conn = client.connect(gw("/ws/public/push"), spoofed)
+
+            val push = conn.nextJson()
+
+            assertEquals("push", push["type"].asString())
+            assertTrue(push["server"].asString().startsWith("ws-backend@"), "server=${push["server"]}")
+            val seen = RelayBackend.seen.single().headers
+            assertTrue(GatewayHeaders.ALL.none(seen::containsHeader), "identity headers leaked: $seen")
+            conn.sendJson("type" to "subscribe", "intervalMs" to 10)
+            assertEquals(
+                "read only",
+                generateSequence {
+                    runBlocking { conn.nextJson() }
+                }.first { it["type"].asString() == "error" }["reason"].asString(),
+            )
+            conn.close()
+        }
+
+    @Test
+    fun `authenticated routes still reject anonymous upgrades with 401`() =
+        runBlocking {
+            for (path in listOf("/ws/echo", "/ws/push", "/ws/chat")) {
+                val error = assertFailsWith<Exception> { client.connect(gw(path)) }
+                assertTrue(error.message.orEmpty().contains("401"), "$path: unexpected error: $error")
+            }
+            assertEquals(emptyList(), RelayBackend.seen)
+            assertEquals(emptyList(), RelayChat.seen)
+        }
+
+    @Test
     fun `ws path without a route gets 404 and reaches no service`() =
         runBlocking {
-            // 매칭되는 라우트가 없으면 GlobalFilter(WsAuthFilter)도 실행되지 않는다: 자격증명이 있어도 404.
+            // 매칭되는 라우트가 없으면 GlobalFilter(GatewayEdgeFilter)와 WsAuth 모두 실행되지 않는다: 자격증명이 있어도 404.
             val error = assertFailsWith<Exception> { client.connect(gw("/ws/unknown", "?ticket=${TestKeys.ticket("gus")}")) }
 
             assertTrue(error.message.orEmpty().contains("404"), "unexpected error: $error")

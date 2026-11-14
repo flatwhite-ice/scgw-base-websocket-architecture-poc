@@ -45,7 +45,7 @@ class WsSessionRuntime(
  * 공통으로 처리하는 것:
  *  - [SessionRegistry] 등록(drain 대상), 세션별 송신 큐(bounded `Channel`)
  *  - heartbeat: 연속 `ws.heartbeat.max-missed`회 pong이 없으면 3008
- *  - 토큰 만료: principal의 `expiresAt`에 3000
+ *  - 토큰 만료: principal의 `expiresAt`에 3000(익명 엔드포인트 제외)
  *  - close는 취소되지 않게 보낸다(D9)
  *
  * 각 세션은 [SessionScope.dispatcher]에서 코루틴으로 실행된다. Reactor와의 변환은 이 경계에서만 한다
@@ -63,12 +63,12 @@ class ManagedWsHandler(
 
     override fun handle(session: WebSocketSession): Mono<Void> =
         mono(runtime.sessionScope.dispatcher) {
-            val principal = (session.handshakeInfo.principal.awaitSingleOrNull() as? WsPrincipal)?.auth
+            val principal = session.handshakeInfo.principal.awaitSingleOrNull() as? WsPrincipal
             if (principal == null) {
                 // 실제로는 도달하지 않는다: WsHandshakeAuthFilter가 미인증 핸드셰이크를 업그레이드 전에 거절한다.
                 session.close(CloseCodes.POLICY_VIOLATION).awaitSingleOrNull()
             } else {
-                SessionRun(session, principal).run()
+                SessionRun(session, principal.auth, principal.anonymous).run()
             }
         }.then()
 
@@ -85,6 +85,7 @@ class ManagedWsHandler(
     private inner class SessionRun(
         private val session: WebSocketSession,
         override val principal: AuthPrincipal,
+        override val anonymous: Boolean,
     ) : WsSessionContext {
         private val outbound =
             Channel<WebSocketMessage>(props.outboundBufferSize) { DataBufferUtils.release(it.payload) }
@@ -105,7 +106,8 @@ class ManagedWsHandler(
                 try {
                     launch { session.send(outbound.consumeAsFlow().asFlux()).awaitSingleOrNull() }
                     launch { heartbeat() }
-                    launch { closeOnExpiry() }
+                    // 익명 세션에는 만료가 없다(principal.expiresAt은 자리표시자 Instant.MAX).
+                    if (!anonymous) launch { closeOnExpiry() }
                     protocol.onOpen(this@SessionRun)
                     // 동기적으로 변환한다: Reactor Netty는 onNext 직후 프레임 버퍼를 해제한다.
                     session

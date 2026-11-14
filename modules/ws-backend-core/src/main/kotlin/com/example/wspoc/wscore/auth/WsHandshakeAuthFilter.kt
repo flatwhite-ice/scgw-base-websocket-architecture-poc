@@ -1,5 +1,6 @@
 package com.example.wspoc.wscore.auth
 
+import com.example.wspoc.wscore.endpoint.WsEndpointHandlerMapping
 import com.example.wspoc.wscore.session.DrainState
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.springframework.core.Ordered
@@ -12,12 +13,14 @@ import reactor.core.publisher.Mono
 
 /**
  * `/ws/` 핸드셰이크를 업그레이드 전에 인증한다. 실패하면 클라이언트는 일반 HTTP 401을 받고
- * WebSocket 세션은 아예 만들어지지 않는다. drain 중에는 새 핸드셰이크에 503을 준다.
+ * WebSocket 세션은 아예 만들어지지 않는다. drain 중에는 새 핸드셰이크에 503을 준다(익명 엔드포인트 포함).
+ * `@WsEndpoint(auth = NONE)` 경로는 인증을 건너뛰고 익명 principal로 연다. 자격증명이나 신원 헤더가 와도 쓰지 않는다(D20).
  */
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class WsHandshakeAuthFilter(
     private val authenticator: HandshakeAuthenticator,
     private val drainState: DrainState,
+    private val endpoints: WsEndpointHandlerMapping,
 ) : CoWebFilter() {
     override suspend fun filter(
         exchange: ServerWebExchange,
@@ -31,9 +34,14 @@ class WsHandshakeAuthFilter(
         }
 
         if (drainState.draining) return reject(exchange, HttpStatus.SERVICE_UNAVAILABLE)
-        val principal = authenticator.authenticate(exchange.request) ?: return reject(exchange, HttpStatus.UNAUTHORIZED)
+        val principal =
+            if (endpoints.isAnonymous(exchange.request.path.pathWithinApplication())) {
+                WsPrincipal.anonymous()
+            } else {
+                WsPrincipal(authenticator.authenticate(exchange.request) ?: return reject(exchange, HttpStatus.UNAUTHORIZED))
+            }
         // WebSocket 핸들러에는 HandshakeInfo.principal로 전달된다(WebSession 불필요).
-        chain.filter(exchange.mutate().principal(Mono.just(WsPrincipal(principal))).build())
+        chain.filter(exchange.mutate().principal(Mono.just(principal)).build())
     }
 
     private suspend fun reject(

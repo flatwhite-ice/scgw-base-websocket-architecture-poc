@@ -4,6 +4,7 @@
 // wsBase마다 auth-api에서 토큰과 티켓을 받아, 그 주소가 제공하는 서비스만 확인한다(핸드셰이크가 404면 건너뜀).
 //   - ws-backend(/ws/echo, /ws/push): echo + push, 응답 server가 ws-backend@, 티켓 재사용 -> 401, 자격증명 없음 -> 401
 //   - ws-chat(/ws/chat): 두 연결이 같은 방에 join한 뒤 say가 둘 다에게 도착, 응답 server가 ws-chat@
+//   - 공개 push(/ws/public/push, 인증 없음): 자격증명 없이 push 수신, 클라이언트 메시지는 read only 오류
 //   - 라우트/엔드포인트가 없는 경로(/ws/unknown) -> 404
 // 게이트웨이(8080)는 두 서비스를 모두 제공하므로 경로별 라우팅까지 확인된다.
 
@@ -38,6 +39,9 @@ public class WsSmoke {
             else System.out.println("  [skip] /ws/echo, /ws/push not served here");
             if (chatServed) checkChat(target, auth, token);
             else System.out.println("  [skip] /ws/chat not served here");
+            // 익명 경로는 101이어야 제공되는 것이다. 없는 경로는 서비스가 인증부터 해서 401, 게이트웨이는 404를 준다.
+            if (handshakeStatus(target + "/ws/public/push") == 101) checkPublicPush(target);
+            else System.out.println("  [skip] /ws/public/push not served here");
             check("unrouted ws path rejected with 404", handshakeStatus(target + "/ws/unknown?ticket=" + ticket(auth, token)) == 404, "");
         }
         System.out.println(failures == 0 ? "ALL OK" : failures + " CHECK(S) FAILED");
@@ -88,6 +92,18 @@ public class WsSmoke {
         check("chat without credentials rejected with 401", handshakeStatus(target + "/ws/chat") == 401, "");
         a.ws.sendClose(1000, "bye").join();
         b.ws.sendClose(1000, "bye").join();
+    }
+
+    static void checkPublicPush(String target) throws Exception {
+        var pub = connect(target + "/ws/public/push");
+        int pushes = 0;
+        for (int i = 0; i < 3; i++) if (pub.next().contains("\"type\":\"push\"")) pushes++;
+        check("public push delivered without credentials", pushes == 3, "got " + pushes);
+        pub.ws.sendText("{\"type\":\"subscribe\",\"intervalMs\":10}", true);
+        String reply;
+        do { reply = pub.next(); } while (reply.contains("\"type\":\"push\""));
+        check("public push rejects client messages (read only)", reply.contains("\"reason\":\"read only\""), reply);
+        pub.ws.sendClose(1000, "bye").join();
     }
 
     record Conn(WebSocket ws, LinkedBlockingQueue<String> inbox) {

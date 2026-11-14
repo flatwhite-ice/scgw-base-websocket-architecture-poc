@@ -27,4 +27,13 @@ class WsConfig {
         push: PushProperties,
         jsonMapper: JsonMapper,
     ) = ManagedWsHandler(runtime) { EchoPushProtocol(push, jsonMapper, autoSubscribe = true) }
+
+    /** 로그인 없이 받는 공개 push(읽기 전용). 게이트웨이에서도 WsAuth 필터가 없는 라우트로 연결된다(D20). */
+    @Bean
+    @WsEndpoint("/ws/public/push", auth = WsEndpoint.Auth.NONE)
+    fun publicPushHandler(
+        runtime: WsSessionRuntime,
+        push: PushProperties,
+        jsonMapper: JsonMapper,
+    ) = ManagedWsHandler(runtime) { EchoPushProtocol(push, jsonMapper, autoSubscribe = true, readOnly = true) }
 }
