@@ -1,4 +1,4 @@
-// Conventions for runnable Spring Boot (WebFlux + Reactor Netty) applications. MVC is intentionally not used.
+// 실행 가능한 Spring Boot(WebFlux + Reactor Netty) 앱 공통 규칙. MVC는 의도적으로 쓰지 않는다.
 plugins {
     id("wspoc.kotlin-conventions")
     id("org.jetbrains.kotlin.plugin.spring")

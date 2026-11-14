@@ -1,7 +1,7 @@
-// Manual end-to-end smoke test using only the JDK (no websocat/k6 needed):
+// JDK만으로 하는 수동 E2E 스모크 테스트(websocat/k6 불필요):
 //   java scripts/WsSmoke.java [authBase] [wsBase...]
 //   java scripts/WsSmoke.java http://localhost:8080 ws://localhost:8082 ws://localhost:8083
-// For each wsBase: gets a token+ticket from auth-api, checks echo + push, ticket replay -> 401, no creds -> 401.
+// wsBase마다: auth-api에서 토큰과 티켓을 받고, echo + push, 티켓 재사용 -> 401, 자격증명 없음 -> 401을 확인한다.
 
 import java.net.URI;
 import java.net.http.HttpClient;

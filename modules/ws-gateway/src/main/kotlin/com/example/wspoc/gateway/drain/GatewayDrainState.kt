@@ -3,7 +3,7 @@ package com.example.wspoc.gateway.drain
 import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Flipped once on shutdown by [GatewayDrainCoordinator]; WsAuthFilter rejects new upgrades with 503 from then on. */
+/** 종료 시 [GatewayDrainCoordinator]가 한 번 켠다. 그 뒤로 WsAuthFilter는 새 업그레이드를 503으로 거절한다. */
 @Component
 class GatewayDrainState {
     private val flag = AtomicBoolean(false)

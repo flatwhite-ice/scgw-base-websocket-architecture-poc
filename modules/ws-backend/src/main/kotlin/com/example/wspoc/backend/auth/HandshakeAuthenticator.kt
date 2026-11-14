@@ -25,7 +25,7 @@ class HandshakeAuthenticator(
         }
     }
 
-    /** Returns the authenticated principal, or null if the handshake must be rejected with 401. */
+    /** 인증된 principal을 반환한다. 핸드셰이크를 401로 거절해야 하면 null. */
     suspend fun authenticate(request: ServerHttpRequest): AuthPrincipal? =
         when (props.auth.mode) {
             AuthMode.GATEWAY -> GatewayHeaders.decode { request.headers.getFirst(it) }
@@ -34,7 +34,7 @@ class HandshakeAuthenticator(
 
     private suspend fun verifySelf(request: ServerHttpRequest): AuthPrincipal? {
         val jwtVerifier = verifier.getObject()
-        // Browsers cannot set headers on a WebSocket handshake, so the short-lived ticket comes in the query string.
+        // 브라우저는 WebSocket 핸드셰이크에 헤더를 넣을 수 없어서, 수명이 짧은 티켓을 쿼리 문자열로 받는다.
         val ticket = request.queryParams.getFirst("ticket")
         val result =
             if (ticket != null) {

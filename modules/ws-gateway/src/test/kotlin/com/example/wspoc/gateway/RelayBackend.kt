@@ -11,15 +11,15 @@ import org.springframework.web.server.WebFilter
 import java.net.URI
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** What the backend actually received for a `/ws/` handshake (after the gateway rewrote it). */
+/** `/ws/` 핸드셰이크에서 backend가 실제로 받은 내용(게이트웨이가 다시 쓴 뒤). */
 data class SeenHandshake(
     val uri: URI,
     val headers: HttpHeaders,
 )
 
 /**
- * A real ws-backend (gateway auth mode) started once per JVM on a random port, standing behind the gateway
- * under test. It records every `/ws/` request it receives so tests can assert what crossed the relay hop.
+ * 테스트 대상 게이트웨이 뒤에 서는 실제 ws-backend(gateway 인증 모드). JVM당 한 번 랜덤 포트로 띄운다.
+ * 받은 `/ws/` 요청을 모두 기록해서, relay 홉을 무엇이 넘어왔는지 테스트가 확인할 수 있게 한다.
  */
 object RelayBackend {
     val seen = CopyOnWriteArrayList<SeenHandshake>()
@@ -27,13 +27,13 @@ object RelayBackend {
     private val context: ConfigurableApplicationContext by lazy {
         SpringApplicationBuilder(WsBackendApplication::class.java, RecorderConfig::class.java)
             .properties(
-                // Do not pick up the gateway's application.yml from the shared test classpath.
+                // 공유 테스트 클래스패스에 있는 게이트웨이의 application.yml을 읽지 않게 한다.
                 "spring.config.name=ws-backend-e2e",
                 "spring.application.name=ws-backend",
                 "server.port=0",
                 "ws.auth.mode=gateway",
                 "ws.heartbeat.interval=30s",
-                // The gateway starter is on this classpath too; the backend must not act as a gateway.
+                // 게이트웨이 starter도 같은 클래스패스에 있다. backend가 게이트웨이처럼 동작하면 안 된다.
                 "spring.cloud.gateway.server.webflux.enabled=false",
                 "spring.cloud.discovery.enabled=false",
             ).run()
@@ -43,7 +43,7 @@ object RelayBackend {
 
     fun <T : Any> bean(type: Class<T>): T = context.getBean(type)
 
-    /** @TestConfiguration keeps it out of the gateway context's component scan (same package). */
+    /** @TestConfiguration이라 같은 패키지에 있어도 게이트웨이 컨텍스트의 component scan에서 빠진다. */
     @TestConfiguration(proxyBeanMethods = false)
     class RecorderConfig {
         @Bean

@@ -22,7 +22,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Client -> ws-gateway (SCG, JWT check) -> ws-backend (gateway auth mode): the relay architecture end to end. */
+/** 클라이언트 -> ws-gateway(SCG, JWT 검증) -> ws-backend(gateway 인증 모드): relay 구조 전체 경로. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(GatewayE2ETest.TestAuthConfig::class)
 class GatewayE2ETest(
@@ -64,7 +64,7 @@ class GatewayE2ETest(
             assertEquals("e1", reply["id"].asString())
             assertEquals("via-gateway", reply["payload"].asString())
             assertEquals("alice", reply["userId"].asString())
-            // The response names the backend instance that served it, not the gateway.
+            // 응답에는 게이트웨이가 아니라 처리한 backend 인스턴스가 찍힌다.
             assertTrue(reply["server"].asString().endsWith(":${RelayBackend.port}"), "server=${reply["server"]}")
             val seen = RelayBackend.seen.single()
             assertEquals("alice", seen.headers.getFirst(GatewayHeaders.USER_ID))
@@ -183,7 +183,7 @@ class GatewayE2ETest(
 
     @Test
     fun `non-websocket requests are not authenticated by the ws filter`() {
-        // Plain HTTP to an unrouted path is just a 404 from the gateway; the filter only guards upgrades.
+        // 라우트가 없는 경로로 일반 HTTP를 보내면 게이트웨이가 404를 준다. 필터는 업그레이드만 검사한다.
         val status =
             org.springframework.web.reactive.function.client.WebClient
                 .create("http://localhost:$port")

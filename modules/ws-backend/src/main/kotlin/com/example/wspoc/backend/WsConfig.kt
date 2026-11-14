@@ -60,7 +60,7 @@ class WsConfig {
                 WebsocketServerSpec
                     .builder()
                     .maxFramePayloadLength(props.maxFramePayload.toBytes().toInt())
-                    // Let PONG frames reach the session so the heartbeat can see them.
+                    // PONG 프레임이 세션까지 전달되게 해서 heartbeat가 볼 수 있게 한다.
                     .handlePing(false)
             }
         return HandshakeWebSocketService(strategy)
@@ -70,18 +70,18 @@ class WsConfig {
     fun webSocketHandlerAdapter(webSocketService: WebSocketService) = WebSocketHandlerAdapter(webSocketService)
 
     @Bean
-    // Only self mode verifies JWTs. A blank URI (tests override with "") disables JWKS;
-    // @ConditionalOnProperty would still match "".
+    // JWT를 검증하는 것은 self 모드뿐이다. URI가 비어 있으면(테스트가 ""로 덮어씀) JWKS를 끈다.
+    // @ConditionalOnProperty는 ""에도 매칭되므로 쓰지 않는다.
     @ConditionalOnExpression("'\${ws.auth.mode:gateway}'.equalsIgnoreCase('self') and !'\${ws.auth.jwks-uri:}'.isBlank()")
     fun jwksKeySource(props: WsProperties): JwksKeySourceLifecycle = JwksKeySourceLifecycle(props)
 
-    /** Only needed (and only created) when a KeySource exists, i.e. in self mode. Null bean otherwise. */
+    /** KeySource가 있을 때(즉 self 모드)만 필요하고 그때만 만든다. 그 외에는 null 빈이다. */
     @Bean
     fun jwtVerifier(keySource: ObjectProvider<KeySource>): JwtVerifier? =
         keySource.ifAvailable?.let { JwtVerifier(it, TicketReplayGuard()) }
 }
 
-/** Owns the JWKS refresh loop for the lifetime of the context. */
+/** 컨텍스트가 살아 있는 동안 JWKS 갱신 루프를 관리한다. */
 class JwksKeySourceLifecycle(
     props: WsProperties,
 ) : KeySource,

@@ -3,12 +3,12 @@ package com.example.wspoc.auth.common
 import com.nimbusds.jose.jwk.JWKSet
 import com.nimbusds.jose.jwk.RSAKey
 
-/** Resolves public verification keys by `kid`. Implementations must not block. */
+/** `kid`로 검증용 공개키를 찾는다. 구현체는 블로킹하면 안 된다. */
 fun interface KeySource {
     suspend fun find(keyId: String?): RSAKey?
 }
 
-/** Fixed set of keys, e.g. the issuer's own key or a key configured locally. */
+/** 고정된 키 집합. 예: 발급자 자신의 키, 로컬에 설정한 키. */
 class StaticKeySource(
     keys: List<RSAKey>,
 ) : KeySource {

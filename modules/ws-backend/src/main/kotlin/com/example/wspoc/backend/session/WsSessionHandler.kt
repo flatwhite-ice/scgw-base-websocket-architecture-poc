@@ -35,13 +35,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * One handler per endpoint. Each session runs as a coroutine on [SessionScope.dispatcher]; the only Reactor
- * interop is at this boundary (receive -> Flow, Channel -> send Flux, close Mono).
+ * 엔드포인트마다 핸들러 하나. 각 세션은 [SessionScope.dispatcher]에서 코루틴으로 실행된다. Reactor와의
+ * 변환은 이 경계에서만 한다(receive -> Flow, Channel -> send Flux, close Mono).
  *
- * Protocol (JSON text frames):
- *  - `{"type":"echo",...}`      -> same object + `srvTs`, `userId` (authenticated principal), `server` (this instance)
- *  - `{"type":"subscribe","topic":"ticker","intervalMs":1000,"payloadBytes":256}` -> periodic `push` messages
- *  - `{"type":"unsubscribe"}`  -> stop pushing
+ * 프로토콜(JSON 텍스트 프레임):
+ *  - `{"type":"echo",...}`      -> 같은 객체 + `srvTs`, `userId`(인증된 principal), `server`(이 인스턴스)
+ *  - `{"type":"subscribe","topic":"ticker","intervalMs":1000,"payloadBytes":256}` -> 주기적 `push` 메시지
+ *  - `{"type":"unsubscribe"}`  -> push 중지
  */
 class WsSessionHandler(
     private val props: WsProperties,
@@ -49,20 +49,20 @@ class WsSessionHandler(
     private val sessionScope: SessionScope,
     private val jsonMapper: JsonMapper,
     private val serverIdentity: ServerIdentity,
-    /** `/ws/push` starts the default subscription on connect; `/ws/echo` waits for an explicit subscribe. */
+    /** `/ws/push`는 연결 즉시 기본 구독을 시작하고, `/ws/echo`는 명시적인 subscribe를 기다린다. */
     private val autoSubscribe: Boolean,
     private val clock: Clock = Clock.systemUTC(),
 ) : WebSocketHandler {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    /** Push messages dropped because a session's outbound queue was full (slow consumer). */
+    /** 세션 송신 큐가 가득 차서(느린 소비자) 버린 push 메시지 수. */
     val droppedPushMessages = AtomicLong()
 
     override fun handle(session: WebSocketSession): Mono<Void> =
         mono(sessionScope.dispatcher) {
             val principal = (session.handshakeInfo.principal.awaitSingleOrNull() as? WsPrincipal)?.auth
             if (principal == null) {
-                // Unreachable in practice: WsHandshakeAuthFilter rejects unauthenticated handshakes before the upgrade.
+                // 실제로는 도달하지 않는다: WsHandshakeAuthFilter가 미인증 핸드셰이크를 업그레이드 전에 거절한다.
                 session.close(CloseCodes.POLICY_VIOLATION).awaitSingleOrNull()
             } else {
                 SessionRun(session, principal).run()
@@ -102,13 +102,13 @@ class WsSessionHandler(
                     if (autoSubscribe) {
                         startPush(scope, props.push.defaultTopic, props.push.defaultIntervalMs, props.push.defaultPayloadBytes)
                     }
-                    // Map synchronously: Reactor Netty releases the frame buffer right after onNext.
+                    // 동기적으로 변환한다: Reactor Netty는 onNext 직후 프레임 버퍼를 해제한다.
                     session
                         .receive()
                         .map(::toInbound)
                         .asFlow()
                         .collect { onInbound(scope, it) }
-                    // Inbound completed => connection closed (by peer or by us).
+                    // inbound 종료 = 연결 종료(상대 또는 우리가 닫음).
                 } finally {
                     registry.unregister(session.id)
                     outbound.close()
@@ -166,13 +166,13 @@ class WsSessionHandler(
             }
         }
 
-        /** Replies apply backpressure to the receive loop instead of being dropped. */
+        /** 응답은 버리지 않고 수신 루프에 backpressure를 건다. */
         private suspend fun reply(node: ObjectNode) {
             if (closing.get()) return
             try {
                 outbound.send(session.textMessage(jsonMapper.writeValueAsString(node)))
             } catch (_: ClosedSendChannelException) {
-                // Session is closing; late replies are discarded (buffer released by onUndeliveredElement).
+                // 세션이 닫히는 중이다. 늦은 응답은 버린다(버퍼는 onUndeliveredElement가 해제).
             }
         }
 
@@ -207,10 +207,10 @@ class WsSessionHandler(
                                 .put("payload", payload)
                         val sent = outbound.trySend(session.textMessage(jsonMapper.writeValueAsString(message)))
                         if (sent.isClosed) return@launch
-                        if (sent.isFailure) droppedPushMessages.incrementAndGet() // queue full: slow consumer
+                        if (sent.isFailure) droppedPushMessages.incrementAndGet() // 큐가 가득 참: 느린 소비자
 
                         seq++
-                        // Fixed-rate schedule so delivery does not drift with processing time.
+                        // 고정 주기 스케줄: 처리 시간 때문에 전송 시각이 밀리지 않게 한다.
                         val nextAt = start + Duration.ofMillis(intervalMs * seq).toNanos()
                         delay(Duration.ofNanos(nextAt - System.nanoTime()).toMillis().coerceAtLeast(0))
                     }
@@ -239,10 +239,10 @@ class WsSessionHandler(
         }
 
         /**
-         * Sends the close frame. Must not be cancelled: Reactor Netty's `sendClose()` immediately ends the inbound
-         * side, which completes [run] and cancels its children — including this coroutine. Cancelling the close
-         * Mono mid-write makes Reactor Netty release the CloseWebSocketFrame before it is flushed, and the client
-         * sees 1006 instead of 1001/3000/3008 (docs/decisions.md D9).
+         * close 프레임을 보낸다. 취소되면 안 된다: Reactor Netty의 `sendClose()`는 inbound를 즉시 끝내고, 그 때문에
+         * [run]이 끝나며 자식 코루틴을 취소한다 — 이 코루틴도 포함된다. 쓰기 도중 close Mono가 취소되면
+         * Reactor Netty가 CloseWebSocketFrame을 전송 전에 해제해서, 클라이언트는 1001/3000/3008 대신
+         * 1006을 받는다(docs/decisions.md D9).
          */
         private suspend fun close(status: CloseStatus) {
             if (!closing.compareAndSet(false, true)) return

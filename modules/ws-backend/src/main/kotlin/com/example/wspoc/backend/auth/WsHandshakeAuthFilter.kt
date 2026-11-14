@@ -12,8 +12,8 @@ import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 
 /**
- * Authenticates `/ws/` handshakes before the upgrade: on failure the client gets a plain HTTP 401 and no
- * WebSocket session is ever created. While draining, new handshakes get 503.
+ * `/ws/` 핸드셰이크를 업그레이드 전에 인증한다. 실패하면 클라이언트는 일반 HTTP 401을 받고
+ * WebSocket 세션은 아예 만들어지지 않는다. drain 중에는 새 핸드셰이크에 503을 준다.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -34,7 +34,7 @@ class WsHandshakeAuthFilter(
 
         if (drainState.draining) return reject(exchange, HttpStatus.SERVICE_UNAVAILABLE)
         val principal = authenticator.authenticate(exchange.request) ?: return reject(exchange, HttpStatus.UNAUTHORIZED)
-        // Exposed to the WebSocket handler as HandshakeInfo.principal (no WebSession needed).
+        // WebSocket 핸들러에는 HandshakeInfo.principal로 전달된다(WebSession 불필요).
         chain.filter(exchange.mutate().principal(Mono.just(WsPrincipal(principal))).build())
     }
 
@@ -43,7 +43,7 @@ class WsHandshakeAuthFilter(
         status: HttpStatus,
     ) {
         exchange.response.statusCode = status
-        // Completing the response here (without calling the chain) is what keeps the upgrade from happening.
+        // chain을 호출하지 않고 여기서 응답을 끝내기 때문에 업그레이드가 일어나지 않는다.
         exchange.response.setComplete().awaitSingleOrNull()
     }
 

@@ -29,7 +29,7 @@ class AccessLogMaskingTest(
         runBlocking {
             val ticket = TestKeys.ticket("masked")
             WsTestClient().connect(URI.create("ws://localhost:$port/ws/echo?ticket=$ticket")).close()
-            // Rejected handshake is logged too.
+            // 거절된 핸드셰이크도 로그에 남는다.
             runCatching { WsTestClient().connect(URI.create("ws://localhost:$port/ws/echo?ticket=$ticket")) }
 
             val deadline = System.currentTimeMillis() + 3_000

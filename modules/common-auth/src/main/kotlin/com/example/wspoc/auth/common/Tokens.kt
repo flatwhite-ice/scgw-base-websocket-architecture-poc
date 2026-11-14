@@ -2,7 +2,7 @@ package com.example.wspoc.auth.common
 
 import java.time.Instant
 
-/** Value of the `typ` claim. */
+/** `typ` 클레임 값. */
 enum class TokenType(
     val claim: String,
 ) {
@@ -44,6 +44,6 @@ object Claims {
     const val SCOPE = "scope"
     const val TYPE = "typ"
 
-    /** On WS tickets: expiry (epoch seconds) of the access token the ticket was exchanged for. Bounds the WS session. */
+    /** WS 티켓 전용: 티켓을 발급받을 때 쓴 access token의 만료 시각(epoch 초). WS 세션 수명의 상한이 된다. */
     const val SESSION_EXPIRES_AT = "sexp"
 }

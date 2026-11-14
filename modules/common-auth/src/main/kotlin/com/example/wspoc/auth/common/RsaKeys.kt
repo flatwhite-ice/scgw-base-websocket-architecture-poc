@@ -23,8 +23,8 @@ object RsaKeys {
             .generate()
 
     /**
-     * Parses an unencrypted PKCS#8 PEM private key (`-----BEGIN PRIVATE KEY-----`, e.g. from
-     * `openssl genpkey -algorithm RSA`) using only the JDK, deriving the public key from the CRT parameters.
+     * 암호화되지 않은 PKCS#8 PEM 개인키(`-----BEGIN PRIVATE KEY-----`, 예: `openssl genpkey -algorithm RSA`로
+     * 생성)를 JDK만으로 파싱한다. 공개키는 CRT 파라미터에서 계산한다.
      */
     fun fromPem(
         pem: String,

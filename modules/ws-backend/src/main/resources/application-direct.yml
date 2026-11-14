@@ -1,5 +1,5 @@
-# Direct (architecture B): clients connect here and the backend verifies the JWT itself.
-# Port 8083 so it can run next to a relay instance on 8081.
+# Direct(구조 B): 클라이언트가 여기로 직접 연결하고 backend가 JWT를 직접 검증한다.
+# 포트 8083: 8081의 relay 인스턴스와 함께 띄울 수 있게 한다.
 server:
   port: 8083
 ws:

@@ -23,7 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-/** Gateway shutdown: relayed sessions are closed with 1001 within the drain window, and the close reaches the backend. */
+/** 게이트웨이 종료: relay 세션이 drain window 안에 1001로 닫히고, 그 close가 backend까지 전달된다. */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = ["ws.gateway.drain.window=500ms"],
@@ -55,7 +55,7 @@ class GatewayDrainTest(
             val sessions =
                 (1..3).map { n ->
                     client.connect(uri()).also { conn ->
-                        // Echo round trip proves the relay to the backend is fully established.
+                        // echo 왕복으로 backend까지 relay가 완전히 성립했음을 확인한다.
                         conn.sendJson("type" to "echo", "id" to "$n")
                         assertEquals("$n", conn.nextJson()["id"].asString())
                     }

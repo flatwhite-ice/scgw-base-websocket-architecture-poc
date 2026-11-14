@@ -39,7 +39,7 @@ class AuthController(
     private val props: AuthProperties,
     @Qualifier("publicJwks") private val publicJwks: Map<String, Any>,
 ) {
-    /** PoC: no password, any non-blank userId gets a token. */
+    /** PoC: 비밀번호 없이, 비어 있지 않은 userId면 토큰을 발급한다. */
     @PostMapping("/auth/token")
     suspend fun token(
         @RequestBody request: TokenRequest,

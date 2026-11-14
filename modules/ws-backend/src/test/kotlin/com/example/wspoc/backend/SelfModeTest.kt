@@ -68,7 +68,7 @@ class SelfModeTest(
         runBlocking {
             val openedBefore = registry.openedCount
 
-            // Plain HTTP view: the handshake gets a 401 response, not 101 Switching Protocols.
+            // HTTP 관점: 핸드셰이크가 101 Switching Protocols가 아니라 401 응답을 받는다.
             val status =
                 assertFailsWith<WebClientResponseException> {
                     WebClient
@@ -85,7 +85,7 @@ class SelfModeTest(
                 }.statusCode.value()
             assertEquals(401, status)
 
-            // WebSocket client view: the handshake fails.
+            // WebSocket 클라이언트 관점: 핸드셰이크가 실패한다.
             val error = assertFailsWith<Exception> { client.connect(ws("/ws/echo")) }
             assertTrue(error.message.orEmpty().contains("401"), "unexpected error: $error")
             assertEquals(openedBefore, registry.openedCount, "no WebSocket session may be created")
@@ -114,7 +114,7 @@ class SelfModeTest(
         runBlocking {
             val conn = client.connect(ws("/ws/push", "?ticket=${TestKeys.ticket("erin")}"))
 
-            // Default subscription starts immediately on connect.
+            // 기본 구독은 연결 즉시 시작된다.
             val first = conn.nextJson()
             assertEquals("push", first["type"].asString())
             assertEquals("ticker", first["topic"].asString())

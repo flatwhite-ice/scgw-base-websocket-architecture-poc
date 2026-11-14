@@ -3,14 +3,14 @@ package com.example.wspoc.auth.common
 import java.time.Instant
 
 /**
- * Headers the gateway injects after authenticating a handshake (relay mode). The backend trusts them only in
- * `gateway` auth mode, and the gateway always strips client-supplied copies to prevent spoofing.
+ * 게이트웨이가 핸드셰이크를 인증한 뒤 넣는 헤더(relay 모드). backend는 `gateway` 인증 모드에서만 이 헤더를
+ * 신뢰하며, 게이트웨이는 위조를 막기 위해 클라이언트가 보낸 같은 이름의 헤더를 항상 제거한다.
  */
 object GatewayHeaders {
     const val USER_ID = "X-User-Id"
     const val SCOPES = "X-Scopes"
 
-    /** Session expiry as epoch seconds, so the backend can close with 3000 (token expired) in relay mode too. */
+    /** 세션 만료 시각(epoch 초). relay 모드에서도 backend가 3000(토큰 만료)으로 닫을 수 있게 한다. */
     const val AUTH_EXP = "X-Auth-Exp"
 
     val ALL = listOf(USER_ID, SCOPES, AUTH_EXP)

@@ -69,4 +69,5 @@ ws-backend defaults to relay (gateway auth mode) on :8081, which is the gateway'
 - Tests:
   - `ws-backend` `testFixtures` provides `TestKeys` (stands in for auth-api) and `WsTestClient`; the gateway tests reuse them.
   - Gateway E2E tests boot a real ws-backend in the same JVM (`RelayBackend`, `spring.config.name=ws-backend-e2e` so it doesn't load the gateway's yml). Helper Spring configs in a scanned test package must be `@TestConfiguration`.
+- Write all code comments (KDoc, `//`, and `#` in yml/toml) in Korean. Keep identifiers, config keys, close codes and RFC section names as they are.
 - Stay inside the current milestone's scope. Log follow-ups under "후속 과제" (follow-ups) in `docs/progress.md`.

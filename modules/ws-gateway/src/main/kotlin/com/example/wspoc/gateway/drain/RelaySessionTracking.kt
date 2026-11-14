@@ -11,17 +11,17 @@ import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 
 /**
- * Makes SCG's relayed client sessions visible to the drain.
+ * SCG가 relay 중인 클라이언트 세션을 drain에서 볼 수 있게 한다.
  *
- * SCG's `WebsocketRoutingFilter` upgrades the client through the `WebSocketService` bean and keeps the resulting
- * session inside its private ProxyWebSocketHandler. That bean is not `@ConditionalOnMissingBean`, so instead of
- * replacing it (or copying SCG's filter) we decorate it: every handler SCG passes in is wrapped so the client
- * session is registered on start and unregistered when the relay ends. Relay behaviour itself is untouched.
+ * SCG의 `WebsocketRoutingFilter`는 `WebSocketService` 빈으로 클라이언트를 업그레이드하고, 만들어진 세션은
+ * private ProxyWebSocketHandler 안에 둔다. 이 빈은 `@ConditionalOnMissingBean`이 아니므로 교체하거나
+ * (SCG 필터를 복사하지) 않고 감싼다: SCG가 넘기는 핸들러를 모두 래핑해서, 클라이언트 세션을 시작 시 등록하고
+ * relay가 끝나면 해제한다. relay 동작 자체는 건드리지 않는다.
  */
 @Configuration(proxyBeanMethods = false)
 class RelaySessionTracking {
     companion object {
-        /** Static so it is registered before other beans; the registry is resolved lazily at wrap time. */
+        /** 다른 빈보다 먼저 등록되도록 static으로 둔다. registry는 래핑 시점에 지연 조회한다. */
         @JvmStatic
         @Bean
         fun relaySessionTrackingPostProcessor(registry: ObjectProvider<RelaySessionRegistry>): BeanPostProcessor =
@@ -47,7 +47,7 @@ class TrackingWebSocketService(
         private val delegate: WebSocketHandler,
         private val registry: RelaySessionRegistry,
     ) : WebSocketHandler {
-        // SCG negotiates subprotocols through this; must be passed through unchanged.
+        // SCG는 이것으로 subprotocol을 협상하므로 그대로 넘겨야 한다.
         override fun getSubProtocols(): List<String> = delegate.subProtocols
 
         override fun handle(session: WebSocketSession): Mono<Void> =

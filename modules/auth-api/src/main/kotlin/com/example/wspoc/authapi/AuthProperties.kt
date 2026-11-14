@@ -13,7 +13,7 @@ data class AuthProperties(
 ) {
     data class SigningKey(
         val keyId: String = "poc-1",
-        /** Unencrypted PKCS#8 PEM. When unset, a fresh key pair is generated at startup. */
+        /** 암호화되지 않은 PKCS#8 PEM. 지정하지 않으면 기동할 때 새 키 쌍을 만든다. */
         val pemPath: Path? = null,
     )
 }

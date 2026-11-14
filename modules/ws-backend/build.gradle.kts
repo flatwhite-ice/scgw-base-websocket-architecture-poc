@@ -6,7 +6,7 @@ plugins {
 dependencies {
     implementation(project(":modules:common-auth"))
 
-    // Shared by this module's tests and ws-gateway's E2E tests.
+    // 이 모듈의 테스트와 ws-gateway의 E2E 테스트가 함께 쓴다.
     testFixturesApi(project(":modules:common-auth"))
     testFixturesApi(libs.spring.boot.starter.webflux)
     testFixturesApi(libs.kotlinx.coroutines.reactor)

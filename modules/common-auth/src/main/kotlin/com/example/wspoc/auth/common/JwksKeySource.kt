@@ -22,9 +22,9 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Caches a remote JWKS and refreshes it periodically. All I/O goes through [HttpClient.sendAsync]
- * so callers on an event loop never block. An unknown `kid` triggers an immediate refetch,
- * rate-limited by [minRefetchInterval], so key rotation is picked up without waiting for the next refresh.
+ * 원격 JWKS를 캐시하고 주기적으로 갱신한다. 모든 I/O는 [HttpClient.sendAsync]로 하므로
+ * event loop에서 호출해도 블로킹되지 않는다. 모르는 `kid`가 오면 즉시 다시 가져오되
+ * [minRefetchInterval]로 빈도를 제한한다. 그래서 키 회전을 다음 갱신 주기를 기다리지 않고 반영한다.
  */
 class JwksKeySource(
     private val uri: URI,
@@ -46,7 +46,7 @@ class JwksKeySource(
         return current.get().selectRsa(keyId)
     }
 
-    /** Starts the periodic refresh loop in [scope]. The first fetch happens immediately. */
+    /** [scope]에서 주기적 갱신 루프를 시작한다. 첫 조회는 즉시 한다. */
     fun start(scope: CoroutineScope): Job =
         scope.launch {
             while (isActive) {
@@ -55,7 +55,7 @@ class JwksKeySource(
             }
         }
 
-    /** Fetches the JWKS now. Returns false (and keeps the cached set) on failure. */
+    /** 지금 JWKS를 가져온다. 실패하면 false를 반환하고 캐시된 키는 유지한다. */
     suspend fun refresh(): Boolean =
         fetchLock.withLock {
             lastFetchAttempt = clock.instant()
@@ -72,7 +72,7 @@ class JwksKeySource(
                 current.set(JWKSet.parse(response.body()))
                 true
             } catch (e: Exception) {
-                // e.g. ConnectException with a null message when auth-api is not up yet; keep the cached keys.
+                // 예: auth-api가 아직 안 떠 있으면 메시지가 null인 ConnectException이 난다. 캐시된 키는 유지한다.
                 log.log(Level.WARNING, "JWKS refresh from $uri failed: ${e.javaClass.simpleName}: ${e.message}")
                 false
             }

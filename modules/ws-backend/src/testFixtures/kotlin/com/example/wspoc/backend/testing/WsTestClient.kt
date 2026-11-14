@@ -19,21 +19,21 @@ import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Thin test wrapper around [ReactorNettyWebSocketClient].
+ * [ReactorNettyWebSocketClient]를 감싼 얇은 테스트용 래퍼.
  *
- * @param answerPings when true (default) Reactor Netty replies to server pings automatically; when false the
- * client swallows pings without answering, simulating a dead peer.
+ * @param answerPings true(기본)면 Reactor Netty가 서버 ping에 자동으로 응답한다. false면 클라이언트가
+ * ping을 받기만 하고 응답하지 않아 죽은 상대를 흉내 낸다.
  */
 class WsTestClient(
     answerPings: Boolean = true,
 ) {
     private val client =
         ReactorNettyWebSocketClient(HttpClient.create()) {
-            // handlePing=true forwards pings to the application instead of auto-replying with a pong.
+            // handlePing=true면 pong을 자동으로 보내지 않고 ping을 애플리케이션으로 넘긴다.
             WebsocketClientSpec.builder().handlePing(!answerPings)
         }
 
-    /** Opens a connection and waits for the handshake. Throws if the server rejects the upgrade (e.g. 401). */
+    /** 연결을 열고 핸드셰이크를 기다린다. 서버가 업그레이드를 거절하면(예: 401) 예외를 던진다. */
     suspend fun connect(
         uri: URI,
         headers: HttpHeaders = HttpHeaders(),
@@ -78,7 +78,7 @@ class WsTestConnection internal constructor() {
                     }
                 }.doFinally {
                     outbound.tryEmitComplete()
-                    // Connection ended without a close frame (closeStatus() completes empty): record 1005.
+                    // close 프레임 없이 연결이 끝남(closeStatus()가 값 없이 완료): 1005로 기록한다.
                     session.closeStatus().defaultIfEmpty(CloseStatus.NO_STATUS_CODE).subscribe { closeStatus.complete(it) }
                 }.then()
         val send = session.send(outbound.asFlux().map(session::textMessage))

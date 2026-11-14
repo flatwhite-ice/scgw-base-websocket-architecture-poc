@@ -8,8 +8,8 @@ import org.springframework.context.annotation.Configuration
 import reactor.netty.http.server.logging.AccessLog
 
 /**
- * Opt-in Reactor Netty access log (`ws.access-log.enabled=true`) with WS tickets masked in the URI.
- * Off by default: per-connection INFO logging would distort the load experiments.
+ * 선택형 Reactor Netty access log(`ws.access-log.enabled=true`). URI의 WS 티켓을 가린다.
+ * 기본은 꺼져 있다: 연결 단위 INFO 로그는 부하 실험 결과를 왜곡한다.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty("ws.access-log.enabled", havingValue = "true")

@@ -10,6 +10,6 @@ dependencies {
     implementation(libs.caffeine)
     testImplementation(libs.reactor.netty.http)
 
-    // Shared BlockHound allow-list, picked up via ServiceLoader by every module's tests.
+    // 공용 BlockHound 허용 목록. 모든 모듈의 테스트가 ServiceLoader로 읽어 간다.
     testFixturesApi(libs.blockhound)
 }

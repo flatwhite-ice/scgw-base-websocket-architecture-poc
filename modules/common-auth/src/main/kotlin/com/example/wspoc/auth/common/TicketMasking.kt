@@ -1,6 +1,6 @@
 package com.example.wspoc.auth.common
 
-/** Masks WS ticket values in a URI/query string so they never end up in logs. */
+/** URI나 쿼리 문자열의 WS 티켓 값을 가려서 로그에 남지 않게 한다. */
 object TicketMasking {
     private val ticketParam = Regex("""([?&]ticket=)[^&#\s]*""")
 

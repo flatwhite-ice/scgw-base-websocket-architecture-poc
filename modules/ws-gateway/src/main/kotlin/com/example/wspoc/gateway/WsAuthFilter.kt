@@ -22,13 +22,13 @@ import org.springframework.web.util.UriComponentsBuilder
 import reactor.core.publisher.Mono
 
 /**
- * Authenticates WebSocket upgrades at the edge (relay architecture).
+ * 엣지에서 WebSocket 업그레이드를 인증한다(relay 구조).
  *
- * - Always strips client-supplied identity headers (X-User-Id, X-Scopes, X-Auth-Exp) so they cannot be spoofed.
- * - On Upgrade requests: verifies `?ticket=` (single use) or `Authorization: Bearer`. On failure it answers 401
- *   and never calls the chain, so no upstream connection to ws-backend is opened.
- * - On success it injects the identity headers and removes `ticket` from the forwarded URI.
- * - While draining, new upgrades get 503.
+ * - 클라이언트가 보낸 신원 헤더(X-User-Id, X-Scopes, X-Auth-Exp)는 위조를 막기 위해 항상 제거한다.
+ * - Upgrade 요청: `?ticket=`(1회용) 또는 `Authorization: Bearer`를 검증한다. 실패하면 401로 응답하고
+ *   chain을 호출하지 않으므로 ws-backend로 가는 upstream 연결이 생기지 않는다.
+ * - 성공하면 신원 헤더를 넣고, 전달할 URI에서 `ticket`을 제거한다.
+ * - drain 중에는 새 업그레이드에 503을 준다.
  */
 @Component
 class WsAuthFilter(
@@ -68,7 +68,7 @@ class WsAuthFilter(
         request: ServerHttpRequest,
         principal: AuthPrincipal,
     ): ServerHttpRequest {
-        // Keep the ticket out of the backend's URI (and any access log there).
+        // backend의 URI(와 그쪽 access log)에 티켓이 남지 않게 한다.
         val uri =
             UriComponentsBuilder
                 .fromUri(request.uri)

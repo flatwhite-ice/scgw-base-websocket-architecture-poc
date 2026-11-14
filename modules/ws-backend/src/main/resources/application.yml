@@ -2,16 +2,16 @@ spring:
   application:
     name: ws-backend
   lifecycle:
-    # Must exceed ws.drain.window (+ close grace) so the drain phase is not cut short.
+    # ws.drain.window(+ close 유예)보다 커야 drain 단계가 중간에 잘리지 않는다.
     timeout-per-shutdown-phase: 35s
 server:
   port: 8081
   shutdown: graceful
 
-# Default = relay (architecture A): behind ws-gateway (whose default target is localhost:8081), trusting the
-# X-User-Id / X-Scopes / X-Auth-Exp headers it injects. No JWKS needed.
-# Must only be reachable through the gateway (K8s: NetworkPolicy) — anyone hitting it directly could spoof identity.
-# Profile `direct` = architecture B (self-authenticating, :8083), can run next to this instance.
+# 기본값 = relay(구조 A): ws-gateway 뒤에서 동작한다(게이트웨이의 기본 대상이 localhost:8081).
+# 게이트웨이가 넣어 준 X-User-Id / X-Scopes / X-Auth-Exp 헤더를 신뢰한다. JWKS는 필요 없다.
+# 게이트웨이를 통해서만 접근 가능해야 한다(K8s: NetworkPolicy) — 직접 접근하면 누구나 신원을 위조할 수 있다.
+# `direct` 프로필 = 구조 B(자체 인증, :8083). 이 인스턴스와 함께 띄울 수 있다.
 ws:
   auth:
     mode: gateway

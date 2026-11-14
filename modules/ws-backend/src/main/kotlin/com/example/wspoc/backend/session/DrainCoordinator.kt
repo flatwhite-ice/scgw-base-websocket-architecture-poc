@@ -13,11 +13,11 @@ import org.springframework.stereotype.Component
 import kotlin.random.Random
 
 /**
- * Graceful drain on shutdown: stop accepting handshakes, then close every session with 1001 Going Away at a random
- * point inside `ws.drain.window` so clients do not all reconnect at the same instant.
+ * 종료 시 graceful drain: 새 핸드셰이크를 받지 않고, 모든 세션을 `ws.drain.window` 안의 무작위 시점에
+ * 1001 Going Away로 닫는다. 클라이언트가 한꺼번에 재연결하지 않게 하기 위해서다.
  *
- * Runs at the highest lifecycle phase, i.e. it is stopped *before* Boot's web server graceful shutdown
- * (DEFAULT_PHASE - 1024), so the server is still up while sessions are being closed.
+ * 가장 높은 lifecycle phase에서 실행된다. 즉 Boot 웹서버 graceful shutdown(DEFAULT_PHASE - 1024)보다
+ * *먼저* stop되므로, 세션을 닫는 동안 서버는 아직 살아 있다.
  */
 @Component
 class DrainCoordinator(
@@ -55,7 +55,7 @@ class DrainCoordinator(
                         handle.closeAsync(CloseCodes.GOING_AWAY)
                     }
                 }
-                // Wait for the jittered closes plus a short grace for close handshakes to finish.
+                // 지터를 둔 close들과, close 핸드셰이크가 끝날 짧은 유예 시간을 기다린다.
                 withTimeoutOrNull(window.toMillis() + GRACE_MILLIS) {
                     while (registry.activeCount > 0) delay(POLL_MILLIS)
                 }

@@ -1,4 +1,4 @@
-// Shared conventions for every module: Kotlin/JVM toolchain, ktlint, JUnit 5 + BlockHound.
+// 모든 모듈 공통 규칙: Kotlin/JVM toolchain, ktlint, JUnit 5 + BlockHound.
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jlleitschuh.gradle.ktlint")
@@ -15,7 +15,7 @@ kotlin {
 }
 
 dependencies {
-    // Spring Boot BOM as a plain Gradle platform: aligns versions without adding Spring to the runtime classpath.
+    // Spring Boot BOM을 일반 Gradle platform으로 가져온다: 런타임 클래스패스에 Spring을 넣지 않고 버전만 맞춘다.
     "implementation"(platform(lib("spring-boot-bom")))
     "testImplementation"(platform(lib("spring-boot-bom")))
     "testImplementation"(lib("kotlin-test-junit5"))
@@ -31,6 +31,6 @@ plugins.withId("java-test-fixtures") {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
-    // BlockHound attaches its agent dynamically and needs AllowRedefinitionToAddDeleteMethods on JDK 13+ (still available on 25, deprecated).
+    // BlockHound는 에이전트를 동적으로 붙이며 JDK 13+에서 AllowRedefinitionToAddDeleteMethods가 필요하다(25에서도 deprecated 상태로 존재).
     jvmArgs("-XX:+AllowRedefinitionToAddDeleteMethods", "-XX:+EnableDynamicAgentLoading")
 }

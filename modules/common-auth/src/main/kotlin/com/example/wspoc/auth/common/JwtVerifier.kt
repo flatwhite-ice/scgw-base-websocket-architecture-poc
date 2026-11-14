@@ -10,8 +10,8 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * Verifies RS256 JWTs issued by [JwtIssuer]. Pure CPU work apart from [KeySource] lookups,
- * so it is safe to call from an event loop.
+ * [JwtIssuer]가 발급한 RS256 JWT를 검증한다. [KeySource] 조회를 빼면 순수 CPU 작업이므로
+ * event loop에서 호출해도 안전하다.
  */
 class JwtVerifier(
     private val keySource: KeySource,
@@ -64,7 +64,7 @@ class JwtVerifier(
                 ?.filter { it.isNotBlank() }
                 ?.toSet()
                 .orEmpty()
-        // A ticket only has to be redeemed before its own `exp`; the session it opens lives until the access token expires.
+        // 티켓은 자신의 `exp` 전에만 교환하면 된다. 그 티켓으로 연 세션은 access token이 만료될 때까지 유지된다.
         val sessionExpiresAt =
             if (expected == TokenType.WS_TICKET) {
                 claims.getLongClaim(Claims.SESSION_EXPIRES_AT)?.let(Instant::ofEpochSecond) ?: expiresAt

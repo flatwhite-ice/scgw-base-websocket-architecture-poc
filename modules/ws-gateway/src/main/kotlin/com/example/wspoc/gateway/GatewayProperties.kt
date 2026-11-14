@@ -11,10 +11,10 @@ data class GatewayProperties(
     val drain: Drain = Drain(),
 ) {
     enum class BackendMode {
-        /** `lb:ws://<service-id>` via Spring Cloud LoadBalancer: one upstream destination per backend pod IP. */
+        /** Spring Cloud LoadBalancer로 `lb:ws://<service-id>`: backend 파드 IP마다 upstream 목적지가 하나씩. */
         DISCOVERY,
 
-        /** A single fixed URI (e.g. a K8s ClusterIP VIP). Used by experiment E3 to reproduce port exhaustion. */
+        /** 고정 URI 하나(예: K8s ClusterIP VIP). 실험 E3에서 포트 고갈을 재현할 때 쓴다. */
         STATIC,
     }
 
@@ -25,7 +25,7 @@ data class GatewayProperties(
     )
 
     data class Drain(
-        /** Relayed sessions are closed with 1001 at random points inside this window on shutdown. */
+        /** 종료 시 relay 세션을 이 window 안의 무작위 시점에 1001로 닫는다. */
         val window: Duration = Duration.ofSeconds(20),
     )
 

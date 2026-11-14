@@ -8,17 +8,17 @@ nimbus-jose-jwt = "10.10"
 blockhound = "1.0.18.RELEASE"
 
 [libraries]
-# BOMs
+# BOM
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
 spring-cloud-bom = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
 
-# Gradle plugins (used by build-logic)
+# Gradle 플러그인 (build-logic에서 사용)
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-allopen = { module = "org.jetbrains.kotlin:kotlin-allopen", version.ref = "kotlin" }
 spring-boot-gradle-plugin = { module = "org.springframework.boot:spring-boot-gradle-plugin", version.ref = "spring-boot" }
 ktlint-gradle-plugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version.ref = "ktlint-gradle" }
 
-# Versions below without version.ref are managed by the Spring Boot / Spring Cloud BOMs
+# 아래에서 version.ref가 없는 항목은 Spring Boot / Spring Cloud BOM이 버전을 관리한다
 nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbus-jose-jwt" }
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core" }

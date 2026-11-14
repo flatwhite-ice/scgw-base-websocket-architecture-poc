@@ -12,22 +12,22 @@ data class WsProperties(
     val drain: Drain = Drain(),
     val push: Push = Push(),
     val maxFramePayload: DataSize = DataSize.ofKilobytes(64),
-    /** Overrides the `server` field in outbound messages (default `<app>@<host>:<port>`). */
+    /** 송신 메시지의 `server` 필드 값을 덮어쓴다(기본 `<app>@<host>:<port>`). */
     val instanceId: String? = null,
-    /** Per-session outbound queue. When full, push messages are dropped (and counted) instead of buffering without bound. */
+    /** 세션별 송신 큐 크기. 가득 차면 push 메시지를 무한히 쌓지 않고 버리며, 버린 수를 센다. */
     val outboundBufferSize: Int = 256,
 ) {
     enum class AuthMode {
-        /** Relay: trust X-User-Id / X-Scopes / X-Auth-Exp injected by ws-gateway. */
+        /** Relay: ws-gateway가 넣어 준 X-User-Id / X-Scopes / X-Auth-Exp를 신뢰한다. */
         GATEWAY,
 
-        /** Direct: verify `?ticket=` or `Authorization: Bearer` during the handshake. */
+        /** Direct: 핸드셰이크에서 `?ticket=` 또는 `Authorization: Bearer`를 직접 검증한다. */
         SELF,
     }
 
     data class Auth(
         val mode: AuthMode = AuthMode.GATEWAY,
-        /** JWKS of auth-api. Required in SELF mode (set by the `direct` profile) unless another KeySource bean exists. */
+        /** auth-api의 JWKS. SELF 모드에서 필요하다(`direct` 프로필이 설정). 다른 KeySource 빈이 있으면 없어도 된다. */
         val jwksUri: URI? = null,
         val jwksRefreshInterval: Duration = Duration.ofMinutes(5),
     )

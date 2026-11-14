@@ -9,11 +9,11 @@ import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Identifies this backend instance in every message it sends (`"server"` field), so a client connected through
- * the gateway can tell which backend served it. Format: `<app>@<host>:<port>`, or `ws.instance-id` if set.
+ * 이 backend 인스턴스가 보내는 모든 메시지에 자신을 표시한다(`"server"` 필드). 게이트웨이를 거쳐 연결한
+ * 클라이언트도 어느 backend가 처리했는지 알 수 있다. 형식: `<app>@<host>:<port>`, 또는 설정된 `ws.instance-id`.
  *
- * Resolved once at startup (main thread): `HOSTNAME` (the pod name in K8s) or a local hostname lookup, which can
- * block on DNS and therefore must never run on an event loop. The port is the one actually bound.
+ * 기동 시 한 번(main 스레드) 결정한다: `HOSTNAME`(K8s에서는 파드 이름) 또는 로컬 호스트명 조회.
+ * 후자는 DNS 때문에 블로킹될 수 있어 event loop에서 실행하면 안 된다. 포트는 실제로 바인딩된 값이다.
  */
 @Component
 class ServerIdentity(

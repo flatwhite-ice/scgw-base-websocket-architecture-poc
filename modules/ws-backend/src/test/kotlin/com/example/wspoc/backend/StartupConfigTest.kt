@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-/** Regression: the app must start with the shipped config, with and without profiles (no test overrides). */
+/** 회귀 방지: 배포 설정 그대로(테스트 덮어쓰기 없이) 프로필 유무와 관계없이 앱이 기동해야 한다. */
 class StartupConfigTest {
     @Nested
     @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)

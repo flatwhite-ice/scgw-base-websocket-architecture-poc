@@ -20,7 +20,7 @@ class AuthConfig {
     @Bean
     fun signingKey(props: AuthProperties): RSAKey {
         val cfg = props.signingKey
-        // Runs once on the main thread during startup, so reading the file here is fine.
+        // 기동 시 main 스레드에서 한 번만 실행되므로 여기서 파일을 읽어도 된다.
         return cfg.pemPath?.let { RsaKeys.fromPem(Files.readString(it), cfg.keyId) }
             ?: RsaKeys.generate(cfg.keyId).also { log.info("Generated ephemeral RSA signing key kid={}", it.keyID) }
     }
@@ -28,7 +28,7 @@ class AuthConfig {
     @Bean
     fun jwtIssuer(signingKey: RSAKey) = JwtIssuer(signingKey)
 
-    /** Validates access tokens presented to /auth/ws-ticket; the issuer's own key is the only trusted key. */
+    /** /auth/ws-ticket에 제시된 access token을 검증한다. 신뢰하는 키는 발급자 자신의 키뿐이다. */
     @Bean
     fun accessTokenVerifier(signingKey: RSAKey) = JwtVerifier(StaticKeySource(signingKey))
 

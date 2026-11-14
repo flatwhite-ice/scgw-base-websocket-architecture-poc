@@ -19,13 +19,13 @@ import reactor.core.scheduler.Schedulers
 import kotlin.random.Random
 
 /**
- * Graceful drain of the relay tier, mirroring ws-backend's DrainCoordinator: stop accepting upgrades (503), then
- * close every relayed client session with 1001 Going Away at a random point inside `ws.gateway.drain.window`, so
- * clients do not all reconnect at once.
+ * relay 계층의 graceful drain. ws-backend의 DrainCoordinator와 같은 방식이다: 새 업그레이드를 받지 않고(503),
+ * relay 중인 모든 클라이언트 세션을 `ws.gateway.drain.window` 안의 무작위 시점에 1001 Going Away로 닫는다.
+ * 클라이언트가 한꺼번에 재연결하지 않게 하기 위해서다.
  *
- * Closing the client side is enough: SCG propagates the close to the backend session (1001 is an RFC 6455 code,
- * so its adaptCloseStatus passes it through unchanged; decisions D14). Runs at the highest lifecycle phase, i.e.
- * before the web server's graceful shutdown.
+ * 클라이언트 쪽만 닫으면 된다: SCG가 close를 backend 세션에도 전달한다(1001은 RFC 6455 코드라
+ * adaptCloseStatus가 바꾸지 않는다. decisions D14). 가장 높은 lifecycle phase에서 실행되므로
+ * 웹서버 graceful shutdown보다 먼저 동작한다.
  */
 @Component
 class GatewayDrainCoordinator(
@@ -59,7 +59,7 @@ class GatewayDrainCoordinator(
                 sessions.forEach { session ->
                     launch {
                         delay(Random.nextLong(window.toMillis().coerceAtLeast(1)))
-                        // Not cancellable: a cancelled close Mono releases the frame before it is written (D9).
+                        // 취소 불가: close Mono가 취소되면 프레임이 전송되기 전에 해제된다(D9).
                         withContext(NonCancellable) { session.close(CloseStatus.GOING_AWAY).awaitSingleOrNull() }
                     }
                 }

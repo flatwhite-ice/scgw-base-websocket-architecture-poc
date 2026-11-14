@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component
 import org.springframework.web.reactive.socket.WebSocketSession
 import java.util.concurrent.ConcurrentHashMap
 
-/** Client-facing WebSocket sessions currently relayed by Spring Cloud Gateway (one per connected client). */
+/** Spring Cloud Gateway가 현재 relay 중인 클라이언트 쪽 WebSocket 세션(연결된 클라이언트마다 하나). */
 @Component
 class RelaySessionRegistry {
     private val sessions = ConcurrentHashMap<String, WebSocketSession>()

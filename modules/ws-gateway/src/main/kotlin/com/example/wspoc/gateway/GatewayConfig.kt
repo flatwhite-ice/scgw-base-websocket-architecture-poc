@@ -36,16 +36,16 @@ class GatewayConfig {
     }
 
     @Bean
-    // Blank value (e.g. tests overriding with "") disables JWKS; @ConditionalOnProperty would still match "".
+    // 빈 값(예: 테스트가 ""로 덮어씀)이면 JWKS를 끈다. @ConditionalOnProperty는 ""에도 매칭된다.
     @ConditionalOnExpression("!'\${ws.gateway.auth.jwks-uri:}'.isBlank()")
     fun jwksKeySource(props: GatewayProperties): KeySource = JwksKeySourceLifecycle(props)
 
-    /** The gateway consumes WS tickets, so it owns the single-use guard in relay mode (decisions D4). */
+    /** relay 모드에서 WS 티켓을 소비하는 쪽은 게이트웨이이므로 1회용 검증도 게이트웨이가 맡는다(decisions D4). */
     @Bean
     fun jwtVerifier(keySource: KeySource) = JwtVerifier(keySource, TicketReplayGuard())
 }
 
-/** Owns the JWKS refresh loop for the lifetime of the context. */
+/** 컨텍스트가 살아 있는 동안 JWKS 갱신 루프를 관리한다. */
 class JwksKeySourceLifecycle(
     props: GatewayProperties,
 ) : KeySource,

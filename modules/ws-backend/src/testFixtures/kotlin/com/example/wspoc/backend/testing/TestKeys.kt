@@ -7,7 +7,7 @@ import com.example.wspoc.auth.common.StaticKeySource
 import com.example.wspoc.auth.common.TokenType
 import java.time.Duration
 
-/** A signing key shared by tests, standing in for auth-api. */
+/** 테스트가 공유하는 서명 키. auth-api 대신 쓴다. */
 object TestKeys {
     val key = RsaKeys.generate("test-key")
     val issuer = JwtIssuer(key)

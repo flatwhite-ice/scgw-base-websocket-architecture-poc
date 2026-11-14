@@ -29,7 +29,7 @@ class HeartbeatTest(
         runBlocking {
             val conn = WsTestClient(answerPings = true).connect(uri())
 
-            delay(1_500) // ~7 heartbeat intervals
+            delay(1_500) // heartbeat 주기 약 7회
 
             assertFalse(conn.closeStatus.isCompleted, "session should still be open")
             conn.sendJson("type" to "echo", "id" to "alive")
