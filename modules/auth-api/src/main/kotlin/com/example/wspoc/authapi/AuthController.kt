@@ -1,20 +1,13 @@
 package com.example.wspoc.authapi
 
-import com.example.wspoc.auth.token.AuthResult
 import com.example.wspoc.auth.token.BearerToken
-import com.example.wspoc.auth.token.JwtIssuer
-import com.example.wspoc.auth.token.JwtVerifier
-import com.example.wspoc.auth.token.TokenType
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
-import java.time.Duration
 import java.time.Instant
 
 data class TokenRequest(
@@ -37,25 +30,14 @@ data class TicketResponse(
 
 @RestController
 class AuthController(
-    private val issuer: JwtIssuer,
-    private val accessTokenVerifier: JwtVerifier,
-    private val props: AuthProperties,
+    private val authService: AuthService,
     @Qualifier("publicJwks") private val publicJwks: Map<String, Any>,
 ) {
-    /** PoC: 비밀번호 없이, 비어 있지 않은 userId면 토큰을 발급한다. */
     @PostMapping("/auth/token")
     suspend fun token(
         @RequestBody request: TokenRequest,
     ): TokenResponse {
-        if (request.userId.isBlank()) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required")
-        val ttl =
-            request.ttlSeconds?.let {
-                if (it < 1 || it > props.accessTokenTtl.seconds) {
-                    throw ResponseStatusException(HttpStatus.BAD_REQUEST, "ttlSeconds must be 1..${props.accessTokenTtl.seconds}")
-                }
-                Duration.ofSeconds(it)
-            } ?: props.accessTokenTtl
-        val issued = issuer.issue(request.userId, request.scopes ?: props.defaultScopes, TokenType.ACCESS, ttl)
+        val issued = authService.issueAccessToken(request.userId, request.scopes, request.ttlSeconds)
         return TokenResponse(token = issued.token, expiresAt = issued.expiresAt)
     }
 
@@ -63,20 +45,8 @@ class AuthController(
     suspend fun wsTicket(
         @RequestHeader(HttpHeaders.AUTHORIZATION, required = false) authorization: String?,
     ): TicketResponse {
-        val token = BearerToken.extract(authorization) ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED)
-        val principal =
-            when (val result = accessTokenVerifier.verify(token, TokenType.ACCESS)) {
-                is AuthResult.Success -> result.principal
-                is AuthResult.Failure -> throw ResponseStatusException(HttpStatus.UNAUTHORIZED, result.reason.name)
-            }
-        val issued =
-            issuer.issue(
-                principal.userId,
-                principal.scopes,
-                TokenType.WS_TICKET,
-                props.ticketTtl,
-                sessionExpiresAt = principal.expiresAt,
-            )
+        val token = BearerToken.extract(authorization) ?: throw UnauthenticatedException()
+        val issued = authService.issueWsTicket(token)
         return TicketResponse(ticket = issued.token, expiresAt = issued.expiresAt)
     }
 
