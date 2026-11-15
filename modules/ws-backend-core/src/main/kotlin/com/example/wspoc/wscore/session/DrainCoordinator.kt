@@ -30,6 +30,9 @@ class DrainCoordinator(
     private var running = false
 
     override fun start() {
+        // 멈췄던 컨텍스트가 다시 시작되면 핸드셰이크를 다시 받는다. Spring 테스트는 쓰지 않는 컨텍스트를 멈췄다가
+        // 재사용할 때 다시 시작하므로, 이게 없으면 재사용된 컨텍스트가 계속 503을 준다.
+        drainState.reset()
         running = true
     }
 

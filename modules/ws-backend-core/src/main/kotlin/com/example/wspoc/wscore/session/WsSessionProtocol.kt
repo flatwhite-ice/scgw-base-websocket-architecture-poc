@@ -1,6 +1,6 @@
 package com.example.wspoc.wscore.session
 
-import com.example.wspoc.auth.common.AuthPrincipal
+import com.example.wspoc.auth.token.AuthPrincipal
 import kotlinx.coroutines.CoroutineScope
 
 /**

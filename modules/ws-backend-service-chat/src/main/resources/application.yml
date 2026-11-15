@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: ws-chat
+  lifecycle:
+    # ws.drain.window(+ close 유예)보다 커야 drain 단계가 중간에 잘리지 않는다.
+    timeout-per-shutdown-phase: 35s
+server:
+  port: 8091
+  shutdown: graceful
+
+# 기본값 = relay(구조 A): ws-gateway 뒤에서 동작한다(게이트웨이가 /ws/chat을 이 서비스로 보낸다).
+# 게이트웨이가 넣어 준 X-User-Id / X-Scopes / X-Auth-Exp 헤더를 신뢰하므로 게이트웨이를 통해서만 접근 가능해야 한다.
+# `direct` 프로필 = 구조 B(자체 인증, :8093). 이 인스턴스와 함께 띄울 수 있다.
+ws:
+  auth:
+    mode: gateway
+  heartbeat:
+    interval: 30s
+    max-missed: 2
+  drain:
+    window: 20s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 메트릭 수집(Prometheus)과 생존 확인만 연다(D27).
+        include: health,prometheus
+  metrics:
+    tags:
+      # 같은 이름의 ws.* 메트릭을 프로세스별로 구분한다.
+      application: ${spring.application.name}
+
+logging:
+  level:
+    # 세션 열림/종료 로그(D21). 부하 실험(E1~E5)에서는 WARN으로 끈다: 연결 단위 로그가 결과를 왜곡한다.
+    #   예) --logging.level.ws.session=WARN  또는  LOGGING_LEVEL_WS_SESSION=WARN
+    ws.session: INFO

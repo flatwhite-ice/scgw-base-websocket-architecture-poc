@@ -126,14 +126,31 @@ class ConsoleControllerTest(
             .expectBody()
             .jsonPath("$.wsBase")
             .isEqualTo("ws://localhost:${stub.port()}")
+            // 화면이 curl 명령을 만들 때 쓰는 auth-api 주소
+            .jsonPath("$.authBase")
+            .isEqualTo("http://localhost:${stub.port()}")
         client
             .get()
             .uri("/")
             .exchange()
             .expectStatus()
             .isOk
+            .expectHeader()
+            .valueEquals("Cache-Control", "no-cache")
             .expectBody(String::class.java)
             .value { body -> check(body!!.contains("WS Console")) { "index.html not served" } }
+        // 화면은 빌드 없는 ES 모듈이다: index.html이 불러오는 파일이 모두 서빙돼야 한다(app.js는 core.js를 import한다).
+        for (asset in listOf("/app.js", "/core.js", "/style.css")) {
+            client
+                .get()
+                .uri(asset)
+                .exchange()
+                .expectStatus()
+                .isOk
+                // 브라우저가 예전 JS/CSS를 캐시에서 쓰지 않게 매번 재검증시킨다.
+                .expectHeader()
+                .valueEquals("Cache-Control", "no-cache")
+        }
     }
 
     companion object {

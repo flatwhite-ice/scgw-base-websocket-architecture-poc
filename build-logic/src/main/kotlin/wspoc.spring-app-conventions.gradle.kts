@@ -17,5 +17,5 @@ dependencies {
     "implementation"(lib("jackson-module-kotlin"))
     "testImplementation"(lib("spring-boot-starter-webflux-test"))
     "testImplementation"(lib("reactor-test"))
-    "testImplementation"(testFixtures(project(":modules:common-auth")))
+    "testImplementation"(testFixtures(project(":modules:auth-token")))
 }

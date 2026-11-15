@@ -1,6 +1,6 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.auth.common.TicketMasking
+import com.example.wspoc.auth.token.TicketMasking
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.reactor.netty.NettyServerCustomizer
 import org.springframework.context.annotation.Bean

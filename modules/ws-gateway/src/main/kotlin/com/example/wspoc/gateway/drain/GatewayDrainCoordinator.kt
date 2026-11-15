@@ -39,6 +39,8 @@ class GatewayDrainCoordinator(
     private var running = false
 
     override fun start() {
+        // 멈췄던 컨텍스트가 다시 시작되면(Spring 테스트의 컨텍스트 재사용) 업그레이드를 다시 받는다.
+        drainState.reset()
         running = true
     }
 

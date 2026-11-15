@@ -21,5 +21,8 @@ object CloseCodes {
     /** 1008 Policy Violation (§7.4.1): 방어용 — 인증된 principal이 없는 세션. */
     val POLICY_VIOLATION: CloseStatus = CloseStatus.POLICY_VIOLATION
 
-    val ALL = listOf(TOKEN_EXPIRED, HEARTBEAT_TIMEOUT, GOING_AWAY, POLICY_VIOLATION)
+    /** 1011 Internal Error (§7.4.1): 서비스의 프로토콜 코드가 예외를 던짐. 그 세션만 닫는다. */
+    val SERVER_ERROR: CloseStatus = CloseStatus.SERVER_ERROR.withReason("internal error")
+
+    val ALL = listOf(TOKEN_EXPIRED, HEARTBEAT_TIMEOUT, GOING_AWAY, POLICY_VIOLATION, SERVER_ERROR)
 }

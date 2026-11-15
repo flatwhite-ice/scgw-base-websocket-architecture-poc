@@ -1,11 +1,11 @@
 package com.example.wspoc.wscore.auth
 
-import com.example.wspoc.auth.common.AuthPrincipal
-import com.example.wspoc.auth.common.AuthResult
-import com.example.wspoc.auth.common.BearerToken
-import com.example.wspoc.auth.common.GatewayHeaders
-import com.example.wspoc.auth.common.JwtVerifier
-import com.example.wspoc.auth.common.TokenType
+import com.example.wspoc.auth.token.AuthResult
+import com.example.wspoc.auth.token.BearerToken
+import com.example.wspoc.auth.token.FailureReason
+import com.example.wspoc.auth.token.GatewayHeaders
+import com.example.wspoc.auth.token.JwtVerifier
+import com.example.wspoc.auth.token.TokenType
 import com.example.wspoc.wscore.WsProperties
 import com.example.wspoc.wscore.WsProperties.AuthMode
 import org.springframework.beans.factory.ObjectProvider
@@ -23,24 +23,27 @@ class HandshakeAuthenticator(
         }
     }
 
-    /** 인증된 principal을 반환한다. 핸드셰이크를 401로 거절해야 하면 null. */
-    suspend fun authenticate(request: ServerHttpRequest): AuthPrincipal? =
+    /** 인증 결과. [AuthResult.Failure]면 핸드셰이크를 401로 거절한다(사유는 메트릭의 `reason` 태그로만 쓴다). */
+    suspend fun authenticate(request: ServerHttpRequest): AuthResult =
         when (props.auth.mode) {
-            AuthMode.GATEWAY -> GatewayHeaders.decode { request.headers.getFirst(it) }
+            // 게이트웨이 뒤에서는 헤더가 없거나 깨진 경우를 구분하지 않는다. 둘 다 게이트웨이를 거치지 않은 요청이다.
+            AuthMode.GATEWAY -> GatewayHeaders.decode { request.headers.getFirst(it) }?.let(AuthResult::Success) ?: MISSING
             AuthMode.SELF -> verifySelf(request)
         }
 
-    private suspend fun verifySelf(request: ServerHttpRequest): AuthPrincipal? {
+    private suspend fun verifySelf(request: ServerHttpRequest): AuthResult {
         val jwtVerifier = verifier.getObject()
         // 브라우저는 WebSocket 핸드셰이크에 헤더를 넣을 수 없어서, 수명이 짧은 티켓을 쿼리 문자열로 받는다.
         val ticket = request.queryParams.getFirst("ticket")
-        val result =
-            if (ticket != null) {
-                jwtVerifier.verify(ticket, TokenType.WS_TICKET)
-            } else {
-                val bearer = BearerToken.extract(request.headers.getFirst(HttpHeaders.AUTHORIZATION)) ?: return null
-                jwtVerifier.verify(bearer, TokenType.ACCESS)
-            }
-        return (result as? AuthResult.Success)?.principal
+        return if (ticket != null) {
+            jwtVerifier.verify(ticket, TokenType.WS_TICKET)
+        } else {
+            val bearer = BearerToken.extract(request.headers.getFirst(HttpHeaders.AUTHORIZATION)) ?: return MISSING
+            jwtVerifier.verify(bearer, TokenType.ACCESS)
+        }
+    }
+
+    private companion object {
+        val MISSING = AuthResult.Failure(FailureReason.MISSING)
     }
 }

@@ -1,11 +1,13 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.auth.common.AuthPrincipal
-import com.example.wspoc.auth.common.AuthResult
-import com.example.wspoc.auth.common.BearerToken
-import com.example.wspoc.auth.common.GatewayHeaders
-import com.example.wspoc.auth.common.JwtVerifier
-import com.example.wspoc.auth.common.TokenType
+import com.example.wspoc.auth.token.AuthPrincipal
+import com.example.wspoc.auth.token.AuthResult
+import com.example.wspoc.auth.token.BearerToken
+import com.example.wspoc.auth.token.FailureReason
+import com.example.wspoc.auth.token.GatewayHeaders
+import com.example.wspoc.auth.token.JwtVerifier
+import com.example.wspoc.auth.token.TokenType
+import com.example.wspoc.metrics.HandshakeResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.reactor.mono
@@ -44,29 +46,32 @@ class WsAuthGatewayFilterFactory(
         OrderedGatewayFilter(
             { exchange, chain ->
                 mono(Dispatchers.Unconfined) {
-                    val principal = authenticate(exchange.request)
-                    if (principal == null) {
-                        exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                        exchange.response.setComplete().awaitSingleOrNull()
-                    } else {
-                        val forwarded = exchange.mutate().request(forwardedRequest(exchange.request, principal)).build()
-                        chain.filter(forwarded).awaitSingleOrNull()
+                    when (val result = authenticate(exchange.request)) {
+                        is AuthResult.Failure -> {
+                            GatewayEdgeFilter
+                                .handshakeTrace(exchange)
+                                ?.record(HandshakeResult.UNAUTHORIZED, result.reason.name.lowercase())
+                            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+                            exchange.response.setComplete().awaitSingleOrNull()
+                        }
+                        is AuthResult.Success -> {
+                            val forwarded = exchange.mutate().request(forwardedRequest(exchange.request, result.principal)).build()
+                            chain.filter(forwarded).awaitSingleOrNull()
+                        }
                     }
                 }.then()
             },
             ORDER,
         )
 
-    private suspend fun authenticate(request: ServerHttpRequest): AuthPrincipal? {
+    private suspend fun authenticate(request: ServerHttpRequest): AuthResult {
         val ticket = request.queryParams.getFirst(TICKET_PARAM)
-        val result =
-            if (ticket != null) {
-                verifier.verify(ticket, TokenType.WS_TICKET)
-            } else {
-                val bearer = BearerToken.extract(request.headers.getFirst(HttpHeaders.AUTHORIZATION)) ?: return null
-                verifier.verify(bearer, TokenType.ACCESS)
-            }
-        return (result as? AuthResult.Success)?.principal
+        return if (ticket != null) {
+            verifier.verify(ticket, TokenType.WS_TICKET)
+        } else {
+            val bearer = BearerToken.extract(request.headers.getFirst(HttpHeaders.AUTHORIZATION)) ?: return MISSING
+            verifier.verify(bearer, TokenType.ACCESS)
+        }
     }
 
     private fun forwardedRequest(
@@ -94,5 +99,6 @@ class WsAuthGatewayFilterFactory(
         /** [GatewayEdgeFilter.ORDER] 바로 뒤: 클라이언트 신원 헤더를 지운 다음에 진짜 신원을 넣는다. */
         const val ORDER = GatewayEdgeFilter.ORDER + 1
         private const val TICKET_PARAM = "ticket"
+        private val MISSING = AuthResult.Failure(FailureReason.MISSING)
     }
 }

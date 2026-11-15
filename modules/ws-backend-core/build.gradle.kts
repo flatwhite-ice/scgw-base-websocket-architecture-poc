@@ -6,16 +6,20 @@ plugins {
 }
 
 dependencies {
-    api(project(":modules:common-auth"))
+    api(project(":modules:auth-token"))
+    api(project(":modules:ws-metrics"))
     api(libs.spring.boot.starter.webflux)
+    // 이 런타임 위의 서비스는 모두 /actuator/prometheus로 공통 메트릭을 내보낸다(D27).
+    api(libs.spring.boot.starter.actuator)
+    runtimeOnly(libs.micrometer.registry.prometheus)
     api(libs.kotlinx.coroutines.reactor)
     api(libs.jackson.module.kotlin)
     implementation(libs.kotlin.logging)
 
-    testImplementation(testFixtures(project(":modules:common-auth")))
+    testImplementation(testFixtures(project(":modules:auth-token")))
 
     // 서비스 모듈의 테스트와 ws-gateway의 E2E 테스트가 함께 쓴다.
-    testFixturesApi(project(":modules:common-auth"))
+    testFixturesApi(project(":modules:auth-token"))
     testFixturesApi(libs.spring.boot.starter.webflux)
     testFixturesApi(libs.kotlinx.coroutines.reactor)
     testFixturesApi(libs.jackson.module.kotlin)

@@ -1,10 +1,10 @@
 package com.example.wspoc.wscore.testing
 
-import com.example.wspoc.auth.common.JwtIssuer
-import com.example.wspoc.auth.common.KeySource
-import com.example.wspoc.auth.common.RsaKeys
-import com.example.wspoc.auth.common.StaticKeySource
-import com.example.wspoc.auth.common.TokenType
+import com.example.wspoc.auth.token.JwtIssuer
+import com.example.wspoc.auth.token.KeySource
+import com.example.wspoc.auth.token.RsaKeys
+import com.example.wspoc.auth.token.StaticKeySource
+import com.example.wspoc.auth.token.TokenType
 import java.time.Duration
 
 /** 테스트가 공유하는 서명 키. auth-api 대신 쓴다. */

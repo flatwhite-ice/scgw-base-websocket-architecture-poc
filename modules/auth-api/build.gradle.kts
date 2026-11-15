@@ -3,5 +3,5 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":modules:common-auth"))
+    implementation(project(":modules:auth-token"))
 }

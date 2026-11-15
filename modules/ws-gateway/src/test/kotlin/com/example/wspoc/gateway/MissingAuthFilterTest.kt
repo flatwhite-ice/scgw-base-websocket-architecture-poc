@@ -1,6 +1,6 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.auth.common.GatewayHeaders
+import com.example.wspoc.auth.token.GatewayHeaders
 import com.example.wspoc.wscore.session.SessionRegistry
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking

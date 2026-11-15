@@ -1,6 +1,6 @@
 package com.example.wspoc.wscore
 
-import com.example.wspoc.auth.common.TicketMasking
+import com.example.wspoc.auth.token.TicketMasking
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.reactor.netty.NettyServerCustomizer

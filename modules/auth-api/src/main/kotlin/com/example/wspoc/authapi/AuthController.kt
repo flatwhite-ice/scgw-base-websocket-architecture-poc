@@ -1,10 +1,10 @@
 package com.example.wspoc.authapi
 
-import com.example.wspoc.auth.common.AuthResult
-import com.example.wspoc.auth.common.BearerToken
-import com.example.wspoc.auth.common.JwtIssuer
-import com.example.wspoc.auth.common.JwtVerifier
-import com.example.wspoc.auth.common.TokenType
+import com.example.wspoc.auth.token.AuthResult
+import com.example.wspoc.auth.token.BearerToken
+import com.example.wspoc.auth.token.JwtIssuer
+import com.example.wspoc.auth.token.JwtVerifier
+import com.example.wspoc.auth.token.TokenType
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus

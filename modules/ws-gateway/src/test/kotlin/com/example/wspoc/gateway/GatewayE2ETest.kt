@@ -1,7 +1,7 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.auth.common.GatewayHeaders
-import com.example.wspoc.auth.common.KeySource
+import com.example.wspoc.auth.token.GatewayHeaders
+import com.example.wspoc.auth.token.KeySource
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
@@ -261,6 +261,20 @@ class GatewayE2ETest(
             val error = assertFailsWith<Exception> { client.connect(gw("/ws/unknown", "?ticket=${TestKeys.ticket("gus")}")) }
 
             assertTrue(error.message.orEmpty().contains("404"), "unexpected error: $error")
+            assertEquals(emptyList(), RelayBackend.seen)
+            assertEquals(emptyList(), RelayChat.seen)
+        }
+
+    @Test
+    fun `sub-paths the services do not serve are not routed`() =
+        runBlocking {
+            // 라우트가 backend 엔드포인트보다 넓으면, 유효한 티켓을 쓰고도 101 직후 1002로 끊긴다(SCG의 101 선응답, D14).
+            // 라우트를 실제 엔드포인트 경로로 좁혀 업그레이드 전에 404가 되게 한다(D24).
+            val chat = assertFailsWith<Exception> { client.connect(gw("/ws/chat/room1", "?ticket=${TestKeys.ticket("hal")}")) }
+            val public = assertFailsWith<Exception> { client.connect(gw("/ws/public/nope")) }
+
+            assertTrue(chat.message.orEmpty().contains("404"), "unexpected error: $chat")
+            assertTrue(public.message.orEmpty().contains("404"), "unexpected error: $public")
             assertEquals(emptyList(), RelayBackend.seen)
             assertEquals(emptyList(), RelayChat.seen)
         }

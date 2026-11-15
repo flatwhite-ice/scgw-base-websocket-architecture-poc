@@ -1,10 +1,10 @@
 package com.example.wspoc.authapi
 
-import com.example.wspoc.auth.common.AuthResult
-import com.example.wspoc.auth.common.FailureReason
-import com.example.wspoc.auth.common.JwksKeySource
-import com.example.wspoc.auth.common.JwtVerifier
-import com.example.wspoc.auth.common.TokenType
+import com.example.wspoc.auth.token.AuthResult
+import com.example.wspoc.auth.token.FailureReason
+import com.example.wspoc.auth.token.JwksKeySource
+import com.example.wspoc.auth.token.JwtVerifier
+import com.example.wspoc.auth.token.TokenType
 import kotlinx.coroutines.runBlocking
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest

@@ -24,7 +24,8 @@ abstract class JsonWsProtocol(
                 null
             } ?: return reply(session, error(session, "invalid json"))
 
-        if (!onMessage(session, node.path("type").asString(), node)) reply(session, error(session, "unknown type"))
+        // 기본값을 준다: 인자 없는 asString()은 `type`이 객체나 배열이면 예외를 던진다. 그런 값은 모르는 type으로 응답한다.
+        if (!onMessage(session, node.path("type").asString(""), node)) reply(session, error(session, "unknown type"))
     }
 
     /** 메시지 하나를 처리한다. 모르는 [type]이면 false. */

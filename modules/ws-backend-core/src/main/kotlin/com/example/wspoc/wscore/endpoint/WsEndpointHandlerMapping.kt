@@ -18,9 +18,16 @@ class WsEndpointHandlerMapping private constructor(
     val anonymousPaths: Set<String>,
 ) : SimpleUrlHandlerMapping(endpoints, ORDER) {
     private val anonymousPatterns = anonymousPaths.map(PathPatternParser.defaultInstance::parse)
+    private val patterns = endpoints.keys.map(PathPatternParser.defaultInstance::parse)
 
     /** 이 요청 경로가 익명 엔드포인트인가. 핸들러 매핑과 같은 PathPattern 규칙으로 판단한다. */
     fun isAnonymous(path: PathContainer): Boolean = anonymousPatterns.any { it.matches(path) }
+
+    /**
+     * 이 요청 경로가 속한 엔드포인트의 선언 경로(`@WsEndpoint`에 적은 문자열). 없으면 null.
+     * 메트릭 태그에는 요청 경로 대신 이 값을 쓴다: 선언된 경로는 개수가 정해져 있다.
+     */
+    fun endpointOf(path: PathContainer): String? = patterns.firstOrNull { it.matches(path) }?.patternString
 
     companion object {
         /** 어노테이션 컨트롤러(RequestMappingHandlerMapping, order 0)보다 먼저 본다. */

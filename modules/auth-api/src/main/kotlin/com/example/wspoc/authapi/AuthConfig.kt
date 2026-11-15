@@ -1,9 +1,9 @@
 package com.example.wspoc.authapi
 
-import com.example.wspoc.auth.common.JwtIssuer
-import com.example.wspoc.auth.common.JwtVerifier
-import com.example.wspoc.auth.common.RsaKeys
-import com.example.wspoc.auth.common.StaticKeySource
+import com.example.wspoc.auth.token.JwtIssuer
+import com.example.wspoc.auth.token.JwtVerifier
+import com.example.wspoc.auth.token.RsaKeys
+import com.example.wspoc.auth.token.StaticKeySource
 import com.nimbusds.jose.jwk.JWKSet
 import com.nimbusds.jose.jwk.RSAKey
 import org.slf4j.LoggerFactory

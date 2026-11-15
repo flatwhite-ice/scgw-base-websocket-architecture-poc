@@ -1,6 +1,13 @@
 spring:
   application:
     name: ws-console
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # 화면 파일(index.html, app.js, core.js, style.css)을 브라우저가 매번 서버에 확인하게 한다(바뀌지 않았으면 304).
+          # 이 설정이 없으면 Last-Modified만 나가서, 브라우저가 고친 JS/CSS 대신 예전 캐시를 쓴다(D26).
+          no-cache: true
 server:
   port: 8060
 
@@ -12,3 +19,17 @@ console:
   ws-base: ws://localhost:8080
   # probe 핸드셰이크 제한 시간
   probe-timeout: 3s
+  # 모니터링 탭(D28)이 보여 줄 프로세스. 콘솔 서버가 각 주소의 /actuator/prometheus를 대신 긁는다.
+  # direct 인스턴스도 보려면 여기에 추가한다(예: name: ws-backend-direct, url: http://localhost:8092).
+  monitor:
+    targets:
+      - name: ws-gateway
+        url: http://localhost:8080
+      - name: ws-backend
+        url: http://localhost:8090
+      - name: ws-chat
+        url: http://localhost:8091
+    # 화면 갱신 주기
+    refresh: 2s
+    # 대상 하나를 긁는 제한 시간
+    scrape-timeout: 2s

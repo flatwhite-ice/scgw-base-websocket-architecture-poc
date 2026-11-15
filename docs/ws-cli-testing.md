@@ -4,6 +4,7 @@
 WebSocket 서비스는 두 개다: **ws-backend**(echo/push)와 **ws-chat**(방 단위 채팅). 게이트웨이가 경로로 서비스를 고른다.
 > 브라우저로 확인하려면 테스트 콘솔을 쓴다: `./gradlew :modules:ws-console:bootRun` 후 http://localhost:8060 (게이트웨이 경유, decisions D23).
 > 화면에서 echo/push/공개 push/chat/토큰 만료를 눌러 보고, 거절 케이스(401/404)는 콘솔 서버의 probe로 실제 HTTP 상태를 본다.
+> 같은 콘솔의 "모니터링" 탭에서 게이트웨이와 서비스의 메트릭(세션, 핸드셰이크, 메시지, 종료 코드)을 볼 수 있다(decisions D28).
 
 아래 명령은 websocat 1.14.1 / macOS 기준으로 실제 실행해 결과를 확인했다(2026-11-15).
 
@@ -24,17 +25,17 @@ websocat --version        # websocat 1.14.1
 |---|---|---|
 | auth-api | 8070 | `./gradlew :modules:auth-api:bootRun` |
 | ws-gateway | 8080 | `./gradlew :modules:ws-gateway:bootRun` |
-| ws-backend (relay, 기본값) | 8090 | `./gradlew :modules:ws-backend:bootRun` |
-| ws-chat (relay, 기본값) | 8091 | `./gradlew :modules:ws-chat:bootRun` |
-| ws-backend (direct, 선택) | 8092 | `./gradlew :modules:ws-backend:bootRun --args='--spring.profiles.active=direct'` |
-| ws-chat (direct, 선택) | 8093 | `./gradlew :modules:ws-chat:bootRun --args='--spring.profiles.active=direct'` |
+| ws-backend (relay, 기본값) | 8090 | `./gradlew :modules:ws-backend-service-default:bootRun` |
+| ws-chat (relay, 기본값) | 8091 | `./gradlew :modules:ws-backend-service-chat:bootRun` |
+| ws-backend (direct, 선택) | 8092 | `./gradlew :modules:ws-backend-service-default:bootRun --args='--spring.profiles.active=direct'` |
+| ws-chat (direct, 선택) | 8093 | `./gradlew :modules:ws-backend-service-chat:bootRun --args='--spring.profiles.active=direct'` |
 | ws-console (브라우저 콘솔, 선택) | 8060 | `./gradlew :modules:ws-console:bootRun` |
 
 - 경로 구성
   - relay: 클라이언트 → **8080(gateway)** → 경로에 따라
     - `/ws/echo`, `/ws/push` → 8090(ws-backend), 인증 필요
-    - `/ws/chat`, `/ws/chat/...` → 8091(ws-chat), 인증 필요
-    - `/ws/public/...` → 8090(ws-backend), **인증 없음**(공개 push)
+    - `/ws/chat` → 8091(ws-chat), 인증 필요
+    - `/ws/public/push` → 8090(ws-backend), **인증 없음**(공개 push)
     - 그 외 `/ws/...` → 게이트웨이가 404
   - direct: 클라이언트 → **8092(ws-backend)** 또는 **8093(ws-chat)**
 - relay 인스턴스(8090, 8091)는 게이트웨이가 넣어 준 헤더를 신뢰한다. 따라서 클라이언트는 항상 8080으로 접속한다.
@@ -214,12 +215,12 @@ echo '{"type":"echo","id":"1"}' | websocat -n1 "ws://localhost:8080/ws/echo?tick
 websocat -n1 "ws://localhost:8080/ws/unknown?ticket=$(curl -s -X POST localhost:8070/auth/ws-ticket -H "Authorization: Bearer $TOKEN" | jq -r .ticket)"
 # → websocat: WebSocketError: ... Received unexpected status code (404 Not Found)
 
-# curl로 보면: 라우트가 있는 경로는 미인증 401, 없는 경로는 404
+# curl로 보면: 라우트가 있는 경로는 미인증 401, 없는 경로는 404(서비스에 없는 하위 경로 /ws/chat/room1도 404, D24)
 for p in /ws/echo /ws/chat /ws/chat/room1 /ws/unknown; do
   printf '%s ' $p; curl -s -o /dev/null -w '%{http_code}\n' -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
     -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' localhost:8080$p
 done
-# → /ws/echo 401, /ws/chat 401, /ws/chat/room1 401, /ws/unknown 404
+# → /ws/echo 401, /ws/chat 401, /ws/chat/room1 404, /ws/unknown 404
 ```
 
 ## 6. 인증 없는 공개 push
@@ -305,9 +306,26 @@ ws session closed id=… path=/ws/echo user=smoke-user code=1000 reason=bye clos
 | 3000 | §7.4.2 애플리케이션 범위 (IANA 이름 Unauthorized) | 토큰 만료. access token 만료 시각에 닫힌다. 티켓으로 연결해도 원래 access token 기준이다 | 토큰을 재발급한 뒤 재연결 |
 | 3008 | §7.4.2 애플리케이션 범위 (IANA 이름 Timeout) | heartbeat 타임아웃. 서버 ping에 pong이 연속 2회 없으면 닫힌다. websocat은 pong을 자동으로 보내므로 유지된다 | 재연결 |
 | 1001 | §7.4.1 Going Away | 서버 종료/배포(drain). ws-backend, ws-chat, gateway에 SIGTERM이 오면 20초 window 안에 지터를 두고 닫힌다 | 백오프와 지터를 두고 재연결 |
+| 1011 | §7.4.1 Internal Error | 서비스의 프로토콜 코드가 예외를 던졌다. 그 세션만 닫힌다(decisions D24). 잘못된 JSON이나 모르는 type은 여기 해당하지 않고 오류 응답만 온다 | 재연결. 반복되면 서버 버그다 |
 
 relay 경로에서 backend가 비정상 종료되면(프로세스 강제 종료 등), 클라이언트는 코드 없는 close 프레임(1005)을 받는다. direct 경로에서는 같은 상황이 close 프레임 없는 연결 끊김(1006)으로 보인다.
 
 핸드셰이크 인증 실패는 close code가 아니라 업그레이드 전에 HTTP 401로 응답한다.
 
-이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `GatewayE2ETest`). 세션 수명 관리는 ws-backend-core 공통이라 ws-chat도 같다. websocat 1.14.1은 close code를 보여 주지 않는다. `-v`를 붙여도 `Received WebSocket close message`만 출력된다. gateway에 SIGTERM을 보내 확인했으며, 20초 window 안에서 세션이 닫히는 것까지는 보인다.
+이 종료 코드들은 자동 테스트로 검증했다(`SelfModeTest`, `HeartbeatTest`, `DrainTest`, `ProtocolErrorTest`, `GatewayE2ETest`). 세션 수명 관리는 ws-backend-core 공통이라 ws-chat도 같다. websocat 1.14.1은 close code를 보여 주지 않는다. `-v`를 붙여도 `Received WebSocket close message`만 출력된다. gateway에 SIGTERM을 보내 확인했으며, 20초 window 안에서 세션이 닫히는 것까지는 보인다.
+
+## 11. 메트릭 보기
+
+ws-gateway, ws-backend, ws-chat은 `/actuator/prometheus`로 메트릭을 내보낸다(decisions D27). 위 명령을 실행한 뒤 바로 확인할 수 있다.
+
+```bash
+curl -s localhost:8080/actuator/prometheus | grep -E '^ws_(sessions_active|handshake_seconds_count|close_total)'   # 게이트웨이(route 태그)
+curl -s localhost:8090/actuator/prometheus | grep -E '^ws_(sessions_active|messages_total)'                      # ws-backend(endpoint 태그)
+# → ws_handshake_seconds_count{application="ws-gateway",reason="missing",result="unauthorized",route="ws-backend"} 1
+#   ws_close_total{application="ws-gateway",code="1000",route="ws-chat"} 2
+```
+
+- 4.2의 티켓 재사용과 미인증 연결은 게이트웨이의 `ws_handshake{result="unauthorized"}`에 `reason="replayed"`, `reason="missing"`으로 남는다.
+- relay에서 서비스가 죽어 있으면 핸드셰이크는 `ok`이고, 실패는 `ws_relay_upstream_connect{result="error"}`에 나온다(SCG가 101을 먼저 보내기 때문이다, D14).
+- 브라우저로 보려면 ws-console의 "모니터링" 탭을 쓴다.
+

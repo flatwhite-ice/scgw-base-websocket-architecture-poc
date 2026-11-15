@@ -1,13 +1,12 @@
 package com.example.wspoc.gateway.drain
 
-import com.example.wspoc.auth.common.GatewayHeaders
+import com.example.wspoc.auth.token.GatewayHeaders
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils
 import org.springframework.web.reactive.socket.CloseStatus
 import org.springframework.web.reactive.socket.WebSocketSession
 import org.springframework.web.server.ServerWebExchange
-import reactor.core.publisher.Mono
 import java.net.URI
 import java.time.Duration
 
@@ -57,23 +56,12 @@ object RelaySessionLog {
     fun closed(
         session: WebSocketSession,
         ctx: RelayLogContext,
+        status: CloseStatus,
         duration: Duration,
         active: Int,
-    ) {
-        if (!log.isInfoEnabled()) return
-        session
-            .closeStatus()
-            .timeout(CLOSE_STATUS_WAIT)
-            .onErrorResume { Mono.empty() }
-            .defaultIfEmpty(CloseStatus.NO_STATUS_CODE)
-            .subscribe { status ->
-                log.info {
-                    "ws relay closed id=${session.id} route=${ctx.routeId} path=${ctx.path} user=${ctx.userId} " +
-                        "upstream=${ctx.upstream} code=${status.code} reason=${status.reason.orEmpty().ifEmpty { "-" }} " +
-                        "durationMs=${duration.toMillis()} active=$active"
-                }
-            }
+    ) = log.info {
+        "ws relay closed id=${session.id} route=${ctx.routeId} path=${ctx.path} user=${ctx.userId} " +
+            "upstream=${ctx.upstream} code=${status.code} reason=${status.reason.orEmpty().ifEmpty { "-" }} " +
+            "durationMs=${duration.toMillis()} active=$active"
     }
-
-    private val CLOSE_STATUS_WAIT: Duration = Duration.ofSeconds(1)
 }

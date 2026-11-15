@@ -1,9 +1,9 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.auth.common.JwksKeySource
-import com.example.wspoc.auth.common.JwtVerifier
-import com.example.wspoc.auth.common.KeySource
-import com.example.wspoc.auth.common.TicketReplayGuard
+import com.example.wspoc.auth.token.JwksKeySource
+import com.example.wspoc.auth.token.JwtVerifier
+import com.example.wspoc.auth.token.KeySource
+import com.example.wspoc.auth.token.TicketReplayGuard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel

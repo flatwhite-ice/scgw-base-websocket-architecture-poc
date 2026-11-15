@@ -11,11 +11,12 @@ dependencyResolutionManagement {
 rootProject.name = "websocket-poc"
 
 include(
-    "modules:common-auth",
+    "modules:auth-token",
+    "modules:ws-metrics",
     "modules:auth-api",
     "modules:ws-backend-core",
-    "modules:ws-backend",
-    "modules:ws-chat",
+    "modules:ws-backend-service-default",
+    "modules:ws-backend-service-chat",
     "modules:ws-gateway",
     "modules:ws-console",
 )

@@ -1,16 +1,23 @@
 package com.example.wspoc.wscore.session
 
-import com.example.wspoc.auth.common.AuthPrincipal
+import com.example.wspoc.auth.token.AuthPrincipal
+import com.example.wspoc.metrics.WsMeters
 import com.example.wspoc.wscore.WsProperties
 import com.example.wspoc.wscore.auth.WsPrincipal
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.reactor.asFlux
@@ -26,7 +33,8 @@ import reactor.core.publisher.Mono
 import java.time.Clock
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
+
+private val log = KotlinLogging.logger {}
 
 /** 모든 [ManagedWsHandler]가 공유하는 런타임 의존성. 서비스는 이 빈 하나만 주입받으면 된다. */
 class WsSessionRuntime(
@@ -34,6 +42,8 @@ class WsSessionRuntime(
     val registry: SessionRegistry,
     val sessionScope: SessionScope,
     val serverIdentity: ServerIdentity,
+    val drainState: DrainState,
+    val meters: WsMeters,
     val clock: Clock = Clock.systemUTC(),
 )
 
@@ -45,7 +55,10 @@ class WsSessionRuntime(
  *  - [SessionRegistry] 등록(drain 대상), 세션별 송신 큐(bounded `Channel`)
  *  - heartbeat: 연속 `ws.heartbeat.max-missed`회 pong이 없으면 3008
  *  - 토큰 만료: principal의 `expiresAt`에 3000(익명 엔드포인트 제외)
+ *  - drain: 등록된 세션은 [DrainCoordinator]가 1001로 닫는다. 핸드셰이크 검사 뒤에 drain이 시작돼 그 목록에 못 든 세션은 스스로 닫는다
+ *  - 프로토콜 예외: 콜백이나 세션 scope의 코루틴이 예외를 던지면 그 세션만 1011로 닫는다
  *  - close는 취소되지 않게 보낸다(D9)
+ *  - 메트릭(D27): 엔드포인트별 활성 세션, 메시지 수, 버린 메시지 수, close 코드, 세션 수명
  *
  * 각 세션은 [SessionScope.dispatcher]에서 코루틴으로 실행된다. Reactor와의 변환은 이 경계에서만 한다
  * (receive -> Flow, Channel -> send Flux, close Mono).
@@ -56,9 +69,6 @@ class ManagedWsHandler(
 ) : WebSocketHandler {
     private val props = runtime.props
 
-    /** 세션 송신 큐가 가득 차서(느린 소비자) [WsSessionContext.trySend]가 버린 메시지 수. */
-    val droppedMessages = AtomicLong()
-
     override fun handle(session: WebSocketSession): Mono<Void> =
         mono(runtime.sessionScope.dispatcher) {
             val principal = session.handshakeInfo.principal.awaitSingleOrNull() as? WsPrincipal
@@ -66,7 +76,7 @@ class ManagedWsHandler(
                 // 실제로는 도달하지 않는다: WsHandshakeAuthFilter가 미인증 핸드셰이크를 업그레이드 전에 거절한다.
                 session.close(CloseCodes.POLICY_VIOLATION).awaitSingleOrNull()
             } else {
-                SessionRun(session, principal.auth, principal.anonymous).run()
+                SessionRun(session, principal.auth, principal.anonymous, runtime.meters.scope(principal.endpoint)).run()
             }
         }.then()
 
@@ -84,6 +94,7 @@ class ManagedWsHandler(
         private val session: WebSocketSession,
         override val principal: AuthPrincipal,
         override val anonymous: Boolean,
+        private val meters: WsMeters.Scope,
     ) : WsSessionContext {
         private val outbound =
             Channel<WebSocketMessage>(props.outboundBufferSize) { DataBufferUtils.release(it.payload) }
@@ -104,15 +115,24 @@ class ManagedWsHandler(
 
         suspend fun run() =
             coroutineScope {
-                scope = this
+                // 프로토콜이 띄우는 코루틴은 supervisor 아래에 둔다. 하나가 실패해도 세션 코루틴이 통째로 취소되어
+                // close 프레임 없이 끊기지 않고, 핸들러가 1011로 닫는다. 세션이 끝나면 cancelChildren이 함께 취소한다.
+                scope =
+                    CoroutineScope(
+                        coroutineContext + SupervisorJob(coroutineContext.job) + CoroutineExceptionHandler { _, e -> launch { fail(e) } },
+                    )
                 runtime.registry.register(session.id) { status -> launch { close(status) } }
+                meters.sessionOpened()
                 SessionLog.opened(session, principal.userId, anonymous, runtime.registry.activeCount)
                 try {
-                    launch { session.send(outbound.consumeAsFlow().asFlux()).awaitSingleOrNull() }
+                    launch { session.send(outbound.consumeAsFlow().onEach(::countOutbound).asFlux()).awaitSingleOrNull() }
                     launch { heartbeat() }
                     // 익명 세션에는 만료가 없다(principal.expiresAt은 자리표시자 Instant.MAX).
                     if (!anonymous) launch { closeOnExpiry() }
-                    protocol.onOpen(this@SessionRun)
+                    // 핸드셰이크 필터의 503 검사를 통과한 뒤 drain이 시작됐으면 DrainCoordinator의 snapshot에 없을 수 있다.
+                    // 등록 뒤에 다시 확인해서 직접 닫는다(snapshot에도 있으면 close가 한 번만 실행된다).
+                    if (runtime.drainState.draining) launch { close(CloseCodes.GOING_AWAY) }
+                    guarded { protocol.onOpen(this@SessionRun) }
                     // 동기적으로 변환한다: Reactor Netty는 onNext 직후 프레임 버퍼를 해제한다.
                     session
                         .receive()
@@ -122,7 +142,7 @@ class ManagedWsHandler(
                     // inbound 종료 = 연결 종료(상대 또는 우리가 닫음).
                 } finally {
                     runtime.registry.unregister(session.id)
-                    logClosed(runtime.registry.activeCount)
+                    onEnded(runtime.registry.activeCount)
                     protocol.onClose(this@SessionRun)
                     outbound.close()
                     coroutineContext.cancelChildren()
@@ -130,15 +150,17 @@ class ManagedWsHandler(
             }
 
         /**
-         * 종료 로그. 서버가 닫았으면 그 상태를 바로 쓴다. 상대가 닫았으면 받은 close 프레임의 상태를 기다리되
+         * 종료 메트릭과 로그. 서버가 닫았으면 그 상태를 바로 쓴다. 상대가 닫았으면 받은 close 프레임의 상태를 기다리되
          * (suspend하지 않고 구독), 프레임 없이 끊겼으면 1005(No Status)로 남긴다.
          */
-        private fun logClosed(active: Int) {
-            if (!SessionLog.enabled) return
-            val durationMs = Duration.ofNanos(System.nanoTime() - openedAt).toMillis()
+        private fun onEnded(active: Int) {
+            val durationNanos = System.nanoTime() - openedAt
+            meters.sessionEnded(durationNanos)
+            val durationMs = Duration.ofNanos(durationNanos).toMillis()
             val byServer = serverCloseStatus
             if (byServer != null) {
-                SessionLog.closed(session, principal.userId, byServer, "server", durationMs, active)
+                meters.closed(byServer.code)
+                if (SessionLog.enabled) SessionLog.closed(session, principal.userId, byServer, "server", durationMs, active)
                 return
             }
             session
@@ -146,22 +168,62 @@ class ManagedWsHandler(
                 .timeout(CLOSE_STATUS_WAIT)
                 .onErrorResume { Mono.empty() }
                 .defaultIfEmpty(CloseStatus.NO_STATUS_CODE)
-                .subscribe { SessionLog.closed(session, principal.userId, it, "client", durationMs, active) }
+                .subscribe {
+                    meters.closed(it.code)
+                    if (SessionLog.enabled) SessionLog.closed(session, principal.userId, it, "client", durationMs, active)
+                }
+        }
+
+        /** 실제로 소켓에 넘긴 데이터 프레임만 센다(ping 제외). 큐에서 버려진 것은 여기 오지 않는다. */
+        private fun countOutbound(message: WebSocketMessage) {
+            if (message.type == WebSocketMessage.Type.TEXT) meters.messagesOut.increment()
         }
 
         private fun toInbound(message: WebSocketMessage): Inbound =
             when (message.type) {
-                WebSocketMessage.Type.TEXT -> Inbound.Text(message.payloadAsText)
-                WebSocketMessage.Type.PONG -> Inbound.Pong
-                else -> Inbound.Other
+                WebSocketMessage.Type.TEXT -> {
+                    meters.messagesIn.increment()
+                    Inbound.Text(message.payloadAsText)
+                }
+
+                WebSocketMessage.Type.PONG -> {
+                    Inbound.Pong
+                }
+
+                // 프로토콜은 TEXT만 처리하고 BINARY는 무시한다. 그래도 받은 데이터 프레임이므로 센다(게이트웨이와 같은 기준, D27).
+                WebSocketMessage.Type.BINARY -> {
+                    meters.messagesIn.increment()
+                    Inbound.Other
+                }
+
+                else -> {
+                    Inbound.Other
+                }
             }
 
         private suspend fun onInbound(inbound: Inbound) {
             when (inbound) {
                 Inbound.Pong -> pongSeen = true
                 Inbound.Other -> Unit
-                is Inbound.Text -> protocol.onText(this, inbound.text)
+                is Inbound.Text -> guarded { protocol.onText(this, inbound.text) }
             }
+        }
+
+        /** 프로토콜 콜백의 예외를 세션 밖으로 내보내지 않는다. 그대로 두면 클라이언트는 코드 없는 종료(1005)만 본다. */
+        private suspend inline fun guarded(block: () -> Unit) {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fail(e)
+            }
+        }
+
+        /** 프로토콜 코드의 예외: 원인을 한 번 남기고 이 세션만 1011로 닫는다. */
+        private suspend fun fail(cause: Throwable) {
+            log.warn(cause) { "ws session ${session.id} failed in protocol code, closing with ${CloseCodes.SERVER_ERROR.code}" }
+            close(CloseCodes.SERVER_ERROR)
         }
 
         override suspend fun send(text: String) {
@@ -180,7 +242,7 @@ class ManagedWsHandler(
                 result.isClosed -> WsSessionContext.Offer.CLOSED
                 else -> {
                     // 큐가 가득 참: 느린 소비자
-                    droppedMessages.incrementAndGet()
+                    meters.messagesDropped.increment()
                     WsSessionContext.Offer.DROPPED
                 }
             }
@@ -221,7 +283,7 @@ class ManagedWsHandler(
     }
 
     private companion object {
-        /** 상대가 닫은 경우 close 프레임 상태를 기다리는 최대 시간(로그용). */
+        /** 상대가 닫은 경우 close 프레임 상태를 기다리는 최대 시간(메트릭과 로그용). */
         val CLOSE_STATUS_WAIT: Duration = Duration.ofSeconds(1)
     }
 }

@@ -12,13 +12,15 @@ spring:
           # Spring Cloud LoadBalancer가 인스턴스마다 upstream 목적지를 나눈다.
           # 고정 URI(ClusterIP, 실험 E3)는 `static` 프로필(application-static.yml)을 쓴다.
           # 경로가 서로 겹치지 않게 적는다(겹치면 order에 따라 결과가 바뀐다). 어느 라우트에도 맞지 않는 경로는 404다.
+          # 경로는 서비스가 실제로 여는 @WsEndpoint 경로만 적는다(D24). `/**`처럼 넓게 잡으면 서비스에 없는 경로가
+          # 404가 아니라 "101 뒤 1002"가 되고(SCG의 101 선응답, D14), WsAuth 라우트에서는 티켓도 소모된다.
           # 인증이 필요한 라우트에는 filters에 WsAuth를 선언한다(D20). 신원 헤더 제거와 drain 503은 전역 필터가 모든 라우트에 한다.
           routes:
             # 공개(익명) push. WsAuth가 없다. backend도 이 경로를 @WsEndpoint(auth = NONE)로 연다.
             - id: ws-backend-public
               uri: lb:ws://ws-backend
               predicates:
-                - Path=/ws/public/**
+                - Path=/ws/public/push
             # echo/push 서비스
             - id: ws-backend
               uri: lb:ws://ws-backend
@@ -26,11 +28,11 @@ spring:
                 - Path=/ws/echo,/ws/push
               filters:
                 - WsAuth
-            # 채팅 서비스. /ws/chat 자신도 매칭된다(PathPattern의 /**는 0개 이상의 세그먼트).
+            # 채팅 서비스
             - id: ws-chat
               uri: lb:ws://ws-chat
               predicates:
-                - Path=/ws/chat/**
+                - Path=/ws/chat
               filters:
                 - WsAuth
           httpclient:
@@ -40,6 +42,8 @@ spring:
             pool:
               max-connections: 50000
               acquire-timeout: 5000
+              # upstream 커넥션 풀 메트릭(reactor.netty.connection.provider.*)
+              metrics: true
             websocket:
               max-frame-payload-length: 65536
     loadbalancer:
@@ -65,6 +69,17 @@ ws:
       jwks-uri: http://localhost:8070/.well-known/jwks.json
     drain:
       window: 20s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 메트릭 수집(Prometheus)과 생존 확인만 연다(D27).
+        include: health,prometheus
+  metrics:
+    tags:
+      # 같은 이름의 ws.* 메트릭을 프로세스별로 구분한다.
+      application: ${spring.application.name}
 
 logging:
   level:
