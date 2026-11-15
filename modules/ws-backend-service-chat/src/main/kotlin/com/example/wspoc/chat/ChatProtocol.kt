@@ -29,46 +29,53 @@ class ChatProtocol(
     ): Boolean {
         if (type !in TYPES) return false
         val room = node.path("room").asString("")
-        if (room.isBlank()) {
-            reply(session, error(session, "room required"))
-            return true
-        }
-        when (type) {
-            "join" -> {
-                if (joined.add(room)) rooms.join(room, session)
-                reply(
-                    session,
-                    newNode()
-                        .put("type", "joined")
-                        .put("room", room)
-                        .put("userId", session.principal.userId)
-                        .put("members", rooms.members(room))
-                        .put("server", session.serverId),
-                )
-            }
-
-            "say" -> {
-                if (room !in joined) {
-                    reply(session, error(session, "not joined"))
-                } else {
-                    val message =
-                        newNode()
-                            .put("type", "message")
-                            .put("room", room)
-                            .put("from", session.principal.userId)
-                            .put("text", node.path("text").asString(""))
-                            .put("srvTs", clock.millis())
-                            .put("server", session.serverId)
-                    rooms.broadcast(room, write(message))
-                }
-            }
-
-            "leave" -> {
-                if (joined.remove(room)) rooms.leave(room, session)
-                reply(session, newNode().put("type", "left").put("room", room).put("server", session.serverId))
-            }
+        when {
+            room.isBlank() -> reply(session, error(session, "room required"))
+            type == "join" -> join(session, room)
+            type == "say" -> say(session, room, node.path("text").asString(""))
+            type == "leave" -> leave(session, room)
         }
         return true
+    }
+
+    private suspend fun join(
+        session: WsSessionContext,
+        room: String,
+    ) {
+        if (joined.add(room)) rooms.join(room, session)
+        val joinedReply =
+            newNode()
+                .put("type", "joined")
+                .put("room", room)
+                .put("userId", session.principal.userId)
+                .put("members", rooms.members(room))
+                .put("server", session.serverId)
+        reply(session, joinedReply)
+    }
+
+    private suspend fun say(
+        session: WsSessionContext,
+        room: String,
+        text: String,
+    ) {
+        if (room !in joined) return reply(session, error(session, "not joined"))
+        val message =
+            newNode()
+                .put("type", "message")
+                .put("room", room)
+                .put("from", session.principal.userId)
+                .put("text", text)
+                .put("srvTs", clock.millis())
+                .put("server", session.serverId)
+        rooms.broadcast(room, write(message))
+    }
+
+    private suspend fun leave(
+        session: WsSessionContext,
+        room: String,
+    ) {
+        if (joined.remove(room)) rooms.leave(room, session)
+        reply(session, newNode().put("type", "left").put("room", room).put("server", session.serverId))
     }
 
     override fun onClose(session: WsSessionContext) {

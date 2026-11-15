@@ -1,4 +1,4 @@
-package com.example.wspoc.gateway.drain
+package com.example.wspoc.gateway.relay
 
 import com.example.wspoc.auth.token.GatewayHeaders
 import io.github.oshai.kotlinlogging.KotlinLogging

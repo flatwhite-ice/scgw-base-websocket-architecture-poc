@@ -17,8 +17,6 @@ object SessionLog {
 
     private val log = KotlinLogging.logger(LOGGER_NAME)
 
-    val enabled: Boolean get() = log.isInfoEnabled()
-
     fun opened(
         session: WebSocketSession,
         userId: String,

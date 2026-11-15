@@ -224,7 +224,17 @@ close 코드는 D13에서 바뀌었다(스펙 4401/4408 → 3000/3008, drain 100
   - CLAUDE.md 명령 목록의 주석 열을 맞췄다(모듈 이름 변경 뒤 어긋남).
 - `./gradlew clean build` 통과(43 suites, 131 tests, 실패 0)
 
+### 읽기 쉽게 정리 (2026-11-15)
+- ws-console을 뺀 모듈에서 중복을 모으고 큰 파일을 나눴다(decisions D31). 외부 동작은 그대로다.
+  - 중복 제거: 핸드셰이크 자격증명 검증(`JwtVerifier.verifyHandshake`), JWKS 갱신 수명(`RefreshingJwksKeySource`), scope 파싱, trace attribute 이름, event loop 측정 연결
+  - 파일 분리: `ManagedSession`, `WsMetricsAutoConfiguration`, 게이트웨이 `TrackingWebSocketService`·`TrackingWebSocketClient`
+  - 게이트웨이 패키지 `gateway.drain` → `gateway.relay`
+- `./gradlew clean build` 통과(43 suites, 131 tests, 실패 0). 테스트는 import와 클래스 이름만 바꿨다.
+- 실제 실행: 새 bootJar로 auth 18070, ws-backend 18090·18092, ws-chat 18091·18093, gateway 18080을 띄웠다. `WsSmoke`(게이트웨이 + direct 둘) **ALL OK**. 게이트웨이 메트릭에 `ok`, `unauthorized{reason=missing|replayed}`, 라우트별 close 코드가 이전과 같게 나왔고, 서비스의 `ws_eventloop_lag`도 `netty`·`parallel` 두 풀에서 나왔다. 게이트웨이 SIGTERM 때 drain 로그 확인, 로그에 티켓 원문 0건.
+
 ## 후속 과제
+- (검토, D31) core와 게이트웨이의 drain coordinator, access log 설정이 거의 같은 코드로 두 벌 있다. 함께 쓸 모듈을 둘지 정한다.
+- (검토, D31) 프로토콜 콜백이 오래 걸릴 때 heartbeat가 PONG을 놓치지 않는지 확인하는 테스트가 없다.
 - (검토, D29) BlockHound 테스트 설정(`WsPocBlockHoundIntegration`)이 `auth-token`의 testFixtures에 있다. 인증과 관계없으므로 별도 테스트 지원 모듈로 옮길지 정한다.
 - (검토) `docs/metrics-proposals.md`의 추가 메트릭 제언 채택 여부를 정한다(세션 수명 버킷, drain 상태, upstream 인스턴스별 세션, `ws.bytes`, heartbeat RTT 등).
 - (M6) Prometheus가 붙으면 모니터링 탭이 Prometheus를 조회하도록 바꾸는 것을 검토한다. 지금은 브라우저가 열려 있는 동안만 기록이 남는다(D28).

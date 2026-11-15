@@ -1,7 +1,7 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.gateway.drain.GatewayDrainState
-import com.example.wspoc.gateway.drain.RelaySessionRegistry
+import com.example.wspoc.gateway.relay.GatewayDrainState
+import com.example.wspoc.gateway.relay.RelaySessionRegistry
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay

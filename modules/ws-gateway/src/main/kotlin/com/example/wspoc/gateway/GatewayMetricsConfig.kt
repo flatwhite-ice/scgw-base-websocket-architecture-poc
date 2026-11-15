@@ -12,7 +12,6 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.http.client.ReactorResourceFactory
 import reactor.netty.http.HttpResources
 import reactor.netty.resources.LoopResources
-import java.util.concurrent.TimeUnit
 
 /**
  * 게이트웨이 메트릭(D27). 이름은 서비스(ws-backend-core)와 같고 `application` 태그로 구분한다.
@@ -32,8 +31,8 @@ class GatewayMetricsConfig {
     ): EventLoopLagProbe {
         val probe = EventLoopLagProbe(registry, props.metrics.eventLoopLagInterval)
         if (props.metrics.eventLoopLagInterval.isZero) return probe
-        val loops = (resources.ifAvailable?.loopResources ?: HttpResources.get()).onServer(LoopResources.DEFAULT_NATIVE)
-        loops.forEach { loop -> probe.watch("netty") { task, delay -> loop.schedule(task, delay, TimeUnit.MILLISECONDS) } }
+        val serverLoops = (resources.ifAvailable?.loopResources ?: HttpResources.get()).onServer(LoopResources.DEFAULT_NATIVE)
+        probe.watch("netty", serverLoops)
         return probe
     }
 

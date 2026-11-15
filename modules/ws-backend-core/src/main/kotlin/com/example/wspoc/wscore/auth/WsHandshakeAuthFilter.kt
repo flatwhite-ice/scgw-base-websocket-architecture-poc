@@ -2,6 +2,7 @@ package com.example.wspoc.wscore.auth
 
 import com.example.wspoc.auth.token.AuthResult
 import com.example.wspoc.metrics.HandshakeResult
+import com.example.wspoc.metrics.HandshakeTrace
 import com.example.wspoc.metrics.WsMeters
 import com.example.wspoc.wscore.endpoint.WsEndpointHandlerMapping
 import com.example.wspoc.wscore.session.DrainState
@@ -64,7 +65,7 @@ class WsHandshakeAuthFilter(
                     }
                 }
             }
-        exchange.attributes[HANDSHAKE_TRACE_ATTR] = trace
+        exchange.attributes[HandshakeTrace.ATTRIBUTE] = trace
         try {
             // WebSocket 핸들러에는 HandshakeInfo.principal로 전달된다(WebSession 불필요).
             chain.filter(exchange.mutate().principal(Mono.just(principal)).build())
@@ -85,8 +86,5 @@ class WsHandshakeAuthFilter(
 
     companion object {
         const val WS_PATH_PREFIX = "/ws/"
-
-        /** 진행 중인 핸드셰이크의 측정 정보([com.example.wspoc.metrics.HandshakeTrace])를 담는 exchange attribute. */
-        const val HANDSHAKE_TRACE_ATTR = "wspoc.handshakeTrace"
     }
 }

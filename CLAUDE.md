@@ -48,20 +48,21 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
 - 버전은 `gradle/libs.versions.toml`에 있다. Boot와 Cloud BOM은 Gradle `platform()` 의존성으로 들어온다. dependency-management 플러그인은 쓰지 않는다.
 - **auth-token**(Spring 비의존):
   - `JwtIssuer`: `suspend`. SecureRandom이 `/dev/urandom`을 읽으므로 `Dispatchers.IO`에서 실행한다.
-  - `JwtVerifier`: event loop에서 써도 안전하다.
-  - `StaticKeySource` / `JwksKeySource`: 논블로킹 `HttpClient.sendAsync`. 모르는 `kid`가 오면 다시 조회한다. 재조회 간격 제한은 성공 뒤 5초, 실패 뒤 0.5초이고, 동시에 들어온 miss는 한 번만 조회한다. 주기 루프는 실패하면 1초부터 30초까지 백오프하므로 auth-api보다 먼저 떠도 된다(D22).
+  - `JwtVerifier`: event loop에서 써도 안전하다. `verifyHandshake(ticket, authorizationHeader)`가 핸드셰이크 자격증명 규칙(티켓이 있으면 티켓, 없으면 Bearer, 둘 다 없으면 `AuthResult.MISSING`)이다. 서비스(self 모드)와 게이트웨이가 함께 쓴다.
+  - `StaticKeySource` / `JwksKeySource` / `RefreshingJwksKeySource`(갱신 루프를 스스로 돌리고 `close()`에서 멈춘다. Spring 빈으로 쓴다): 논블로킹 `HttpClient.sendAsync`. 모르는 `kid`가 오면 다시 조회한다. 재조회 간격 제한은 성공 뒤 5초, 실패 뒤 0.5초이고, 동시에 들어온 miss는 한 번만 조회한다. 주기 루프는 실패하면 1초부터 30초까지 백오프하므로 auth-api보다 먼저 떠도 된다(D22).
   - `TicketReplayGuard`: Caffeine. 티켓은 1회용이고, 티켓을 소비하는 쪽이 강제한다.
   - `GatewayHeaders`: `X-User-Id`, `X-Scopes`, `X-Auth-Exp`
   - `TicketMasking`
 - **ws-metrics**(Spring 비의존, Micrometer만, D27): 서비스와 게이트웨이가 함께 쓰는 메트릭 정의
   - `WsMeters`: `ws.sessions.active`, `ws.handshake`, `ws.messages`, `ws.messages.dropped`, `ws.close`, `ws.session.duration`, `ws.relay.upstream.connect`. 세션을 묶는 태그는 서비스가 `endpoint`, 게이트웨이가 `route`다.
+  - `HandshakeTrace`(`Handshake.kt`): 핸드셰이크 한 건의 측정. 필터가 exchange attribute `HandshakeTrace.ATTRIBUTE`에 넣고, 결과가 정해지는 곳에서 `record`를 부른다(처음 기록만 남는다).
   - `EventLoopLagProbe`: `ws.eventloop.lag`. 예약한 작업이 늦게 실행된 시간을 잰다(`pool` = `netty`/`parallel`).
   - `/actuator/prometheus`로 내보낸다(ws-backend, ws-chat, ws-gateway). 프로세스는 `application` 태그로 구분한다.
 - **auth-api**: `/auth/token`(선택 `ttlSeconds`, 1..access-token-ttl, 3000 만료 테스트용, D23), `/auth/ws-ticket`(Bearer access token 필요. 티켓에는 access token 만료 시각을 담은 `sexp` 클레임이 있고, 이것이 WS 세션 수명의 상한이 된다), `/.well-known/jwks.json`
 - **ws-backend-core**(라이브러리, 패키지 `com.example.wspoc.wscore`, AutoConfiguration으로 등록, D17): 모든 WebSocket 서비스가 공유하는 런타임
   - 엔드포인트는 `@WsEndpoint("/ws/...")`를 붙인 `WebSocketHandler` 빈이다(클래스 또는 `@Bean` 메서드). `auth = WsEndpoint.Auth.NONE`이면 익명 엔드포인트가 된다: 핸드셰이크 인증과 3000 만료가 없지만 heartbeat와 drain은 그대로 적용된다(D20). `WsEndpointHandlerMapping`이 기동 시 이들을 모으고 경로가 중복되면 바로 실패한다(D16). WebFlux의 raw WebSocket에는 `@RequestMapping` 모델이 없고, STOMP는 Servlet 전용이다.
   - `WsHandshakeAuthFilter`는 **업그레이드 전에** 401(drain 중이면 503)로 거절한다. principal은 `exchange.mutate().principal()`로 넘기고, 핸들러는 `HandshakeInfo.principal`로 읽는다.
-  - `ManagedWsHandler`는 세션마다 코루틴을 돌리고 수명을 관리한다. 서비스는 세션별 `WsSessionProtocol`(`onOpen`/`onText`/`onClose`)만 제공하면 된다. 보통은 `JsonWsProtocol`을 쓰며, 모든 서비스가 같은 `{"type":...}` 분기와 오류 응답을 갖게 된다. 수명 관리에 포함되는 것:
+  - `ManagedWsHandler`는 세션마다 `ManagedSession`을 만들어 코루틴 하나로 돌린다. 수명 관리 코드는 모두 `ManagedSession.kt`에 있다(송신, 수신, 수명, 프로토콜 예외, 종료 기록 순). 서비스는 세션별 `WsSessionProtocol`(`onOpen`/`onText`/`onClose`)만 제공하면 된다. 보통은 `JsonWsProtocol`을 쓰며, 모든 서비스가 같은 `{"type":...}` 분기와 오류 응답을 갖게 된다. 수명 관리에 포함되는 것:
     - 크기 제한이 있는 송신 `Channel`: 응답은 `send`로 backpressure를 걸고, push와 broadcast는 `trySend`로 가득 차면 버린다(`ws.messages.dropped` 메트릭으로 집계)
     - heartbeat 타임아웃이면 3008(Timeout)로 닫는다
     - 토큰이 만료되면 3000(Unauthorized)으로 닫는다
@@ -82,8 +83,9 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
     - 그 밖의 `/ws/...`는 인증 전에 404다. GlobalFilter는 매칭된 라우트에서만 실행되기 때문이다.
   - 서비스를 추가할 때는 `loadbalancer.eager-load.clients`와 simple-discovery 인스턴스에도 추가한다.
   - `static` 프로필(`application-static.yml`)은 실험 E3용으로 `${WS_BACKEND_URI}`와 `${WS_CHAT_URI}`로 보낸다. 프로필은 라우트 목록 전체를 교체하므로, 덮어쓸 때는 모든 라우트를 다시 정의한다.
-  - 메트릭(D27): `RelaySessionTracking`이 세션(클라이언트 쪽 프레임 수, close 코드)과 upstream 연결(`WebSocketClient` 빈을 감싼 `TrackingWebSocketClient`)을 잰다. SCG는 101을 먼저 응답하므로 upstream 실패는 `ws.handshake`가 아니라 `ws.relay.upstream.connect{result=error}`에 나온다.
-  - `GatewayDrainCoordinator`는 종료 시 relay 중인 세션을 1001과 jitter로 닫는다. SCG는 세션을 외부에 노출하지 않으므로 `RelaySessionTracking`이 `WebSocketService` 빈을 감싸서(BeanPostProcessor) 세션을 등록한다. SCG 자체 필터는 건드리지 않는다. 503 검사 뒤에 drain이 시작된 업그레이드는 upstream을 열지 않고 바로 1001로 닫는다(D24).
+  - relay 세션을 다루는 코드는 `gateway.relay` 패키지에 있다. `RelaySessionTracking`(BeanPostProcessor)이 SCG의 빈 두 개를 감싼다: `WebSocketService` → `TrackingWebSocketService`(세션 등록, drain, 프레임 수, close 코드, 로그), `WebSocketClient` → `TrackingWebSocketClient`(upstream 연결).
+  - 메트릭(D27): 위 두 클래스가 잰다. SCG는 101을 먼저 응답하므로 upstream 실패는 `ws.handshake`가 아니라 `ws.relay.upstream.connect{result=error}`에 나온다.
+  - `GatewayDrainCoordinator`는 종료 시 relay 중인 세션을 1001과 jitter로 닫는다. SCG는 세션을 외부에 노출하지 않으므로 `TrackingWebSocketService`가 세션을 등록한다. SCG 자체 필터는 건드리지 않는다. 503 검사 뒤에 drain이 시작된 업그레이드는 upstream을 열지 않고 바로 1001로 닫는다(D24).
 - **ws-console**(:8060, 개발 도구, D23): 빌드 없는 vanilla JS 화면(`src/main/resources/static/`)을 서빙하는 WebFlux 앱이다. 게이트웨이를 대상으로 ws-backend/ws-chat의 모든 케이스를 눌러 볼 수 있다.
   - 브라우저는 `console.ws-base`에 `?ticket=`으로 WebSocket을 직접 연다.
   - 화면 구조(D25): `core.js`(타임라인, 연결, 패널, 프레임 표시)와 `app.js`(시나리오별 규칙과 데모)다. 타임라인의 한 줄은 "화면에 보이는 것(view)"과 "오간 프레임(wire)"을 함께 갖고, 보기 방식(나란히/교차/화면/프로토콜)은 `data-mode`와 CSS만으로 바뀐다. 색은 `style.css`의 토큰이고 `html[data-theme]`으로 데이/나이트를 바꾼다.
@@ -110,7 +112,7 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
 - 테스트:
   - `ws-backend-core`의 `testFixtures`가 `TestKeys`(auth-api 대역)와 `WsTestClient`를 제공한다. 서비스와 게이트웨이 테스트가 재사용한다.
   - 게이트웨이 E2E 테스트는 같은 JVM에서 실제 서비스를 띄운다: `RelayBackend`와 `RelayChat`이고 둘 다 `RelayApp`의 인스턴스다. 각자 받은 핸드셰이크를 기록하므로 테스트가 라우팅을 확인할 수 있다. 게이트웨이 yml을 읽지 않도록 `spring.config.name=ws-backend-e2e`를 쓴다.
-  - 서비스들이 게이트웨이 테스트 classpath에 있으므로, 게이트웨이의 `src/test/resources/application.properties`가 core AutoConfiguration을 게이트웨이 컨텍스트에서 제외한다. 스캔되는 테스트 패키지의 보조 Spring 설정은 `@TestConfiguration`이어야 한다.
+  - 서비스들이 게이트웨이 테스트 classpath에 있으므로, 게이트웨이의 `src/test/resources/application.properties`가 core AutoConfiguration(`WsCoreAutoConfiguration`, `WsMetricsAutoConfiguration`, `MaskedAccessLogConfig`)을 게이트웨이 컨텍스트에서 제외한다. core에 AutoConfiguration을 추가하면 여기에도 추가한다. 스캔되는 테스트 패키지의 보조 Spring 설정은 `@TestConfiguration`이어야 한다.
   - KDoc 안에 `/**`를 쓰지 않는다. Kotlin 중첩 주석이 열린다.
 - 모든 코드 주석(KDoc, `//`, yml/toml의 `#`)은 한국어로 쓴다. 식별자, 설정 키, close 코드, RFC 절 이름은 그대로 둔다.
 - 현재 마일스톤 범위 안에서 작업한다. 후속 과제는 `docs/progress.md`의 "후속 과제"에 기록한다.

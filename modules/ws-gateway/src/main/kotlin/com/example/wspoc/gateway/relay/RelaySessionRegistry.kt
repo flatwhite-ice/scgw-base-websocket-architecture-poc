@@ -1,4 +1,4 @@
-package com.example.wspoc.gateway.drain
+package com.example.wspoc.gateway.relay
 
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.socket.WebSocketSession
