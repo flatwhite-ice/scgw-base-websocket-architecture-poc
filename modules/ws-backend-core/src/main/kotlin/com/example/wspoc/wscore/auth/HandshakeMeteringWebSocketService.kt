@@ -20,6 +20,6 @@ class HandshakeMeteringWebSocketService(
         handler: WebSocketHandler,
     ): Mono<Void> =
         delegate.handleRequest(exchange, handler).doOnSuccess {
-            exchange.getAttribute<HandshakeTrace>(WsHandshakeAuthFilter.HANDSHAKE_TRACE_ATTR)?.record(HandshakeResult.OK)
+            exchange.getAttribute<HandshakeTrace>(HandshakeTrace.ATTRIBUTE)?.record(HandshakeResult.OK)
         }
 }

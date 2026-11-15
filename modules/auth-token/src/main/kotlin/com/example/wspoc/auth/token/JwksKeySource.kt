@@ -4,6 +4,8 @@ import com.nimbusds.jose.jwk.JWKSet
 import com.nimbusds.jose.jwk.RSAKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
@@ -117,4 +119,21 @@ class JwksKeySource(
     private companion object {
         val log: Logger = Logger.getLogger(JwksKeySource::class.java.name)
     }
+}
+
+/**
+ * 만들자마자 갱신 루프를 돌리고 [close]에서 멈추는 [JwksKeySource]. Spring 빈으로 등록하면 컨텍스트가 닫힐 때
+ * `close()`가 불린다(서비스의 self 모드와 게이트웨이가 쓴다).
+ */
+class RefreshingJwksKeySource(
+    uri: URI,
+    refreshInterval: Duration,
+) : KeySource,
+    AutoCloseable {
+    private val delegate = JwksKeySource(uri, refreshInterval)
+    private val scope = CoroutineScope(SupervisorJob()).also { delegate.start(it) }
+
+    override suspend fun find(keyId: String?) = delegate.find(keyId)
+
+    override fun close() = scope.cancel()
 }

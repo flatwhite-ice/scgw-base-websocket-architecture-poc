@@ -1,11 +1,8 @@
 package com.example.wspoc.wscore.auth
 
 import com.example.wspoc.auth.token.AuthResult
-import com.example.wspoc.auth.token.BearerToken
-import com.example.wspoc.auth.token.FailureReason
 import com.example.wspoc.auth.token.GatewayHeaders
 import com.example.wspoc.auth.token.JwtVerifier
-import com.example.wspoc.auth.token.TokenType
 import com.example.wspoc.wscore.WsProperties
 import com.example.wspoc.wscore.WsProperties.AuthMode
 import org.springframework.beans.factory.ObjectProvider
@@ -27,23 +24,13 @@ class HandshakeAuthenticator(
     suspend fun authenticate(request: ServerHttpRequest): AuthResult =
         when (props.auth.mode) {
             // 게이트웨이 뒤에서는 헤더가 없거나 깨진 경우를 구분하지 않는다. 둘 다 게이트웨이를 거치지 않은 요청이다.
-            AuthMode.GATEWAY -> GatewayHeaders.decode { request.headers.getFirst(it) }?.let(AuthResult::Success) ?: MISSING
-            AuthMode.SELF -> verifySelf(request)
-        }
+            AuthMode.GATEWAY -> GatewayHeaders.decode { request.headers.getFirst(it) }?.let(AuthResult::Success) ?: AuthResult.MISSING
 
-    private suspend fun verifySelf(request: ServerHttpRequest): AuthResult {
-        val jwtVerifier = verifier.getObject()
-        // 브라우저는 WebSocket 핸드셰이크에 헤더를 넣을 수 없어서, 수명이 짧은 티켓을 쿼리 문자열로 받는다.
-        val ticket = request.queryParams.getFirst("ticket")
-        return if (ticket != null) {
-            jwtVerifier.verify(ticket, TokenType.WS_TICKET)
-        } else {
-            val bearer = BearerToken.extract(request.headers.getFirst(HttpHeaders.AUTHORIZATION)) ?: return MISSING
-            jwtVerifier.verify(bearer, TokenType.ACCESS)
+            // 브라우저는 WebSocket 핸드셰이크에 헤더를 넣을 수 없어서, 수명이 짧은 티켓을 쿼리 문자열로도 받는다.
+            AuthMode.SELF ->
+                verifier.getObject().verifyHandshake(
+                    ticket = request.queryParams.getFirst("ticket"),
+                    authorizationHeader = request.headers.getFirst(HttpHeaders.AUTHORIZATION),
+                )
         }
-    }
-
-    private companion object {
-        val MISSING = AuthResult.Failure(FailureReason.MISSING)
-    }
 }

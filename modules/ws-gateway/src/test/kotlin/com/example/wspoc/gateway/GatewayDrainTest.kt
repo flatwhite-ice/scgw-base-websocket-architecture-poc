@@ -1,7 +1,7 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.gateway.drain.GatewayDrainCoordinator
-import com.example.wspoc.gateway.drain.RelaySessionRegistry
+import com.example.wspoc.gateway.relay.GatewayDrainCoordinator
+import com.example.wspoc.gateway.relay.RelaySessionRegistry
 import com.example.wspoc.wscore.session.SessionRegistry
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient

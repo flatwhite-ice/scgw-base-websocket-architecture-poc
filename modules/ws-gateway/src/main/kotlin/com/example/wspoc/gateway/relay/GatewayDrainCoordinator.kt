@@ -1,4 +1,4 @@
-package com.example.wspoc.gateway.drain
+package com.example.wspoc.gateway.relay
 
 import com.example.wspoc.gateway.GatewayProperties
 import kotlinx.coroutines.CoroutineScope

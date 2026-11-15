@@ -1,7 +1,7 @@
 package com.example.wspoc.gateway
 
 import com.example.wspoc.auth.token.GatewayHeaders
-import com.example.wspoc.gateway.drain.GatewayDrainState
+import com.example.wspoc.gateway.relay.GatewayDrainState
 import com.example.wspoc.metrics.HandshakeResult
 import com.example.wspoc.metrics.HandshakeTrace
 import com.example.wspoc.metrics.WsMeters
@@ -50,7 +50,7 @@ class GatewayEdgeFilter(
             exchange.response.statusCode = HttpStatus.SERVICE_UNAVAILABLE
             return exchange.response.setComplete()
         }
-        exchange.attributes[HANDSHAKE_TRACE_ATTR] = trace
+        exchange.attributes[HandshakeTrace.ATTRIBUTE] = trace
         // 401이나 성공은 이미 기록됐다(처음 기록만 남는다).
         return chain.filter(stripIdentity(exchange)).doFinally { trace.record(HandshakeResult.ERROR) }
     }
@@ -64,10 +64,5 @@ class GatewayEdgeFilter(
 
     companion object {
         const val ORDER = Ordered.HIGHEST_PRECEDENCE
-
-        /** 진행 중인 핸드셰이크의 [HandshakeTrace]를 담는 exchange attribute. 업그레이드 요청에만 있다. */
-        const val HANDSHAKE_TRACE_ATTR = "wspoc.handshakeTrace"
-
-        fun handshakeTrace(exchange: ServerWebExchange): HandshakeTrace? = exchange.getAttribute(HANDSHAKE_TRACE_ATTR)
     }
 }

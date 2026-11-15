@@ -25,12 +25,6 @@ object GatewayHeaders {
     fun decode(header: (String) -> String?): AuthPrincipal? {
         val userId = header(USER_ID)?.takeIf { it.isNotBlank() } ?: return null
         val expiresAt = header(AUTH_EXP)?.toLongOrNull()?.let(Instant::ofEpochSecond) ?: return null
-        val scopes =
-            header(SCOPES)
-                ?.split(' ')
-                ?.filter { it.isNotBlank() }
-                ?.toSet()
-                .orEmpty()
-        return AuthPrincipal(userId, scopes, expiresAt)
+        return AuthPrincipal(userId, AuthPrincipal.parseScopes(header(SCOPES)), expiresAt)
     }
 }

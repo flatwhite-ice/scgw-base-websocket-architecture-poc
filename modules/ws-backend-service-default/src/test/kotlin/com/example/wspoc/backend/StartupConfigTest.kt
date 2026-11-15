@@ -2,7 +2,7 @@ package com.example.wspoc.backend
 
 import com.example.wspoc.auth.token.JwtVerifier
 import com.example.wspoc.auth.token.KeySource
-import com.example.wspoc.wscore.JwksKeySourceLifecycle
+import com.example.wspoc.auth.token.RefreshingJwksKeySource
 import com.example.wspoc.wscore.WsProperties
 import org.junit.jupiter.api.Nested
 import org.springframework.beans.factory.ObjectProvider
@@ -41,7 +41,7 @@ class StartupConfigTest {
         @Test
         fun `starts in self mode with JWKS`() {
             assertEquals(WsProperties.AuthMode.SELF, props.auth.mode)
-            assertNotNull(keySource.ifAvailable as? JwksKeySourceLifecycle)
+            assertNotNull(keySource.ifAvailable as? RefreshingJwksKeySource)
         }
     }
 

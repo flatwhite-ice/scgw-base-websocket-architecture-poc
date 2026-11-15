@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import java.time.Duration
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 /**
@@ -29,7 +30,7 @@ class EventLoopLagProbe(
     @Volatile
     private var stopped = false
 
-    /** [target]을 측정하기 시작한다. event loop마다 재려면 loop마다 한 번씩 부른다(같은 [pool] 이름이면 한 Timer에 모인다). */
+    /** [target]을 측정하기 시작한다. 같은 [pool] 이름으로 여러 번 부르면 한 Timer에 모인다. */
     fun watch(
         pool: String,
         target: Target,
@@ -43,6 +44,12 @@ class EventLoopLagProbe(
                 .register(registry)
         scheduleNext(target, timer)
     }
+
+    /** [executors] 각각을 같은 [pool] 이름으로 측정한다. Netty의 `EventLoopGroup`을 그대로 넘기면 loop마다 잰다. */
+    fun watch(
+        pool: String,
+        executors: Iterable<ScheduledExecutorService>,
+    ) = executors.forEach { executor -> watch(pool) { task, delay -> executor.schedule(task, delay, TimeUnit.MILLISECONDS) } }
 
     private fun scheduleNext(
         target: Target,

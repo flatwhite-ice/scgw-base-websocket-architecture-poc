@@ -2,22 +2,22 @@ package com.example.wspoc.gateway
 
 import com.example.wspoc.auth.token.AuthPrincipal
 import com.example.wspoc.auth.token.AuthResult
-import com.example.wspoc.auth.token.BearerToken
-import com.example.wspoc.auth.token.FailureReason
 import com.example.wspoc.auth.token.GatewayHeaders
 import com.example.wspoc.auth.token.JwtVerifier
-import com.example.wspoc.auth.token.TokenType
 import com.example.wspoc.metrics.HandshakeResult
+import com.example.wspoc.metrics.HandshakeTrace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.reactor.mono
 import org.springframework.cloud.gateway.filter.GatewayFilter
+import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.OrderedGatewayFilter
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.server.reactive.ServerHttpRequest
 import org.springframework.stereotype.Component
+import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.util.UriComponentsBuilder
 
 /**
@@ -43,34 +43,32 @@ class WsAuthGatewayFilterFactory(
     class Config
 
     override fun apply(config: Config): GatewayFilter =
-        OrderedGatewayFilter(
-            { exchange, chain ->
-                mono(Dispatchers.Unconfined) {
-                    when (val result = authenticate(exchange.request)) {
-                        is AuthResult.Failure -> {
-                            GatewayEdgeFilter
-                                .handshakeTrace(exchange)
-                                ?.record(HandshakeResult.UNAUTHORIZED, result.reason.name.lowercase())
-                            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                            exchange.response.setComplete().awaitSingleOrNull()
-                        }
-                        is AuthResult.Success -> {
-                            val forwarded = exchange.mutate().request(forwardedRequest(exchange.request, result.principal)).build()
-                            chain.filter(forwarded).awaitSingleOrNull()
-                        }
-                    }
-                }.then()
-            },
-            ORDER,
-        )
+        OrderedGatewayFilter({ exchange, chain -> mono(Dispatchers.Unconfined) { authenticate(exchange, chain) }.then() }, ORDER)
 
-    private suspend fun authenticate(request: ServerHttpRequest): AuthResult {
-        val ticket = request.queryParams.getFirst(TICKET_PARAM)
-        return if (ticket != null) {
-            verifier.verify(ticket, TokenType.WS_TICKET)
-        } else {
-            val bearer = BearerToken.extract(request.headers.getFirst(HttpHeaders.AUTHORIZATION)) ?: return MISSING
-            verifier.verify(bearer, TokenType.ACCESS)
+    private suspend fun authenticate(
+        exchange: ServerWebExchange,
+        chain: GatewayFilterChain,
+    ) {
+        val request = exchange.request
+        val result =
+            verifier.verifyHandshake(
+                request.queryParams.getFirst(TICKET_PARAM),
+                request.headers.getFirst(HttpHeaders.AUTHORIZATION),
+            )
+        when (result) {
+            is AuthResult.Failure -> {
+                // 업그레이드 요청이면 Edge 필터가 시작한 측정에 거절 사유를 남긴다(D27).
+                exchange
+                    .getAttribute<HandshakeTrace>(HandshakeTrace.ATTRIBUTE)
+                    ?.record(HandshakeResult.UNAUTHORIZED, result.reason.name.lowercase())
+                exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+                exchange.response.setComplete().awaitSingleOrNull()
+            }
+
+            is AuthResult.Success -> {
+                val forwarded = exchange.mutate().request(forwardedRequest(request, result.principal)).build()
+                chain.filter(forwarded).awaitSingleOrNull()
+            }
         }
     }
 
@@ -99,6 +97,5 @@ class WsAuthGatewayFilterFactory(
         /** [GatewayEdgeFilter.ORDER] 바로 뒤: 클라이언트 신원 헤더를 지운 다음에 진짜 신원을 넣는다. */
         const val ORDER = GatewayEdgeFilter.ORDER + 1
         private const val TICKET_PARAM = "ticket"
-        private val MISSING = AuthResult.Failure(FailureReason.MISSING)
     }
 }

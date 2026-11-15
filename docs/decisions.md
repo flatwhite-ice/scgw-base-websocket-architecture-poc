@@ -507,3 +507,20 @@ M4 중 메트릭만 먼저 구현했다(Grafana, compose, k6는 M6으로 옮겼�
 - **이유:** 모듈 목록에서 `ws-backend`가 공통 런타임(`ws-backend-core`) 위의 서비스 중 하나라는 것, `ws-chat`도 같은 런타임 위의 서비스라는 것이 보이지 않았다. `ws-backend-*` 접두어로 묶었다.
 - **바꾸지 않은 것:** 런타임에서 쓰는 서비스 이름이다. `spring.application.name`(`ws-backend`, `ws-chat`), 게이트웨이의 `lb://` discovery id와 라우트 id, 메트릭 `application` 태그, 응답의 `server` 필드, smoke 스크립트와 콘솔의 기대값이 모두 이 이름을 쓴다. 바꾸면 게이트웨이 설정, 메트릭 시계열, 실험 비교 기준이 함께 바뀌므로 모듈 이름 변경과 분리했다. Kotlin 패키지(`com.example.wspoc.backend`, `com.example.wspoc.chat`)도 그대로다.
 
+## D31. 읽기 쉽게 정리: 중복 제거와 큰 파일 분리 (2026-11-15)
+
+ws-console을 뺀 모듈을 정리했다. 외부에서 보이는 동작(엔드포인트, 응답, close 코드, 메트릭 이름과 태그, 설정 키)은 바뀌지 않는다.
+
+- **중복을 한곳으로 모았다.**
+  - 핸드셰이크 자격증명 규칙(티켓이 있으면 티켓, 없으면 Bearer)이 서비스(self 모드)와 게이트웨이에 따로 있었다. `JwtVerifier.verifyHandshake`로 옮겼다. 자격증명이 없는 결과는 `AuthResult.MISSING`이다.
+  - JWKS 갱신 루프의 수명 관리 클래스(`JwksKeySourceLifecycle`)가 core와 게이트웨이에 하나씩 있었다. auth-token의 `RefreshingJwksKeySource`(`AutoCloseable`) 하나로 바꿨다. Spring에 의존하지 않고, 빈으로 등록하면 컨텍스트가 닫힐 때 `close()`가 불린다.
+  - scope 문자열 파싱(`AuthPrincipal.parseScopes`), 핸드셰이크 trace의 exchange attribute 이름(`HandshakeTrace.ATTRIBUTE`), event loop 측정 연결(`EventLoopLagProbe.watch(pool, executors)`)도 각각 한곳에 두었다.
+- **큰 파일을 역할별로 나눴다.**
+  - `ManagedWsHandler.kt`(289줄) → `ManagedWsHandler`(핸들러, 40줄 남짓)와 `ManagedSession`(연결 하나의 수명). 받은 프레임을 나르던 중간 타입(`Inbound`)은 없앴다.
+  - `WsCoreAutoConfiguration` → 메트릭 빈을 `WsMetricsAutoConfiguration`으로 분리했다.
+  - 게이트웨이 `RelaySessionTracking.kt`(189줄) → `RelaySessionTracking`(빈을 감싸는 설정), `TrackingWebSocketService`, `TrackingWebSocketClient`.
+  - `JwtVerifier.verify`, `ChatProtocol.onMessage`, `EchoPushProtocol.onMessage`는 단계나 메시지 종류별 함수로 나눴다.
+- **패키지 이름:** 게이트웨이 `gateway.drain` → `gateway.relay`. drain뿐 아니라 세션 추적, 메트릭, 세션 로그가 함께 있어서 이름이 내용보다 좁았다.
+- **달라진 동작 하나:** 서비스가 PONG을 받은 것을 프로토콜 콜백 순서와 무관하게 수신 즉시 기록한다. 이전에는 프레임을 순서대로 넘기는 흐름 안에서 기록해서, 프로토콜이 오래 걸리면 PONG 확인도 함께 밀렸다. heartbeat가 살아 있는 연결을 3008로 끊을 여지가 줄어든다. 이 경우를 재현하는 테스트는 따로 만들지 않았다.
+- **하지 않은 것:** core의 `DrainCoordinator`와 게이트웨이의 `GatewayDrainCoordinator`, 두 `MaskedAccessLogConfig`는 모양이 거의 같지만 그대로 두었다. 둘이 함께 쓸 Spring 의존 모듈이 없고, 하나를 만들 만큼 크지 않다.
+

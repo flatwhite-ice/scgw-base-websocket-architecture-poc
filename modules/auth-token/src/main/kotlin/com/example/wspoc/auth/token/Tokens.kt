@@ -29,10 +29,15 @@ sealed interface AuthResult {
     data class Failure(
         val reason: FailureReason,
     ) : AuthResult
+
+    companion object {
+        /** 자격증명이 아예 없는 요청의 결과. */
+        val MISSING = Failure(FailureReason.MISSING)
+    }
 }
 
 enum class FailureReason {
-    /** 자격증명이 아예 없다(티켓, Bearer, 게이트웨이 신원 헤더). 검증기가 아니라 핸드셰이크 인증 쪽에서 쓴다. */
+    /** 자격증명이 아예 없다(티켓, Bearer, 게이트웨이 신원 헤더). */
     MISSING,
     MALFORMED,
     UNKNOWN_KEY,
