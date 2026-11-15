@@ -1,0 +1,492 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "WebSocket PoC 시스템 아키텍처 (Relay vs Direct)",
+    "output": "docs/archify/websocket-poc-architecture.html",
+    "locale": "ko",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/flatwhite-ice/scgw-base-websocket-architecture-poc.git",
+      "provider": "github",
+      "revision": "5c602cf509275196d7a2c85a8c613e2cef1c3f0a"
+    }
+  },
+  "components": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "클라이언트",
+      "sublabel": "브라우저 / k6 · websocat",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        150,
+        96
+      ]
+    },
+    {
+      "id": "console",
+      "type": "frontend",
+      "label": "ws-console",
+      "sublabel": ":8060 테스트 콘솔",
+      "tag": "vanilla JS",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-console/src/main/kotlin/com/example/wspoc/console/ConsoleController.kt",
+          "line": 41,
+          "end_line": 124
+        },
+        {
+          "path": "modules/ws-console/src/main/kotlin/com/example/wspoc/console/MetricsScraper.kt",
+          "line": 87,
+          "end_line": 160
+        },
+        {
+          "path": "modules/ws-console/src/main/resources/application.yml",
+          "line": 13,
+          "end_line": 35
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "ws-gateway",
+      "sublabel": ":8080 SCG · WsAuth",
+      "tag": "Relay (A)",
+      "pos": [
+        330,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-gateway/src/main/resources/application.yml",
+          "line": 18,
+          "end_line": 61
+        },
+        {
+          "path": "modules/ws-gateway/src/main/kotlin/com/example/wspoc/gateway/WsAuthGatewayFilterFactory.kt",
+          "line": 39,
+          "end_line": 101
+        },
+        {
+          "path": "modules/ws-gateway/src/main/kotlin/com/example/wspoc/gateway/GatewayEdgeFilter.kt",
+          "line": 32,
+          "end_line": 68
+        }
+      ]
+    },
+    {
+      "id": "relay-backend",
+      "type": "backend",
+      "label": "ws-backend",
+      "sublabel": ":8090 echo / push",
+      "tag": "헤더 신뢰",
+      "pos": [
+        640,
+        170
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-backend-service-default/src/main/kotlin/com/example/wspoc/backend/WsConfig.kt",
+          "line": 16,
+          "end_line": 39
+        },
+        {
+          "path": "modules/ws-backend-service-default/src/main/kotlin/com/example/wspoc/backend/EchoPushProtocol.kt",
+          "line": 23,
+          "end_line": 113
+        },
+        {
+          "path": "modules/ws-backend-service-default/src/main/resources/application.yml",
+          "line": 8,
+          "end_line": 18
+        }
+      ]
+    },
+    {
+      "id": "relay-chat",
+      "type": "backend",
+      "label": "ws-chat",
+      "sublabel": ":8091 방 채팅",
+      "tag": "헤더 신뢰",
+      "pos": [
+        640,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-backend-service-chat/src/main/kotlin/com/example/wspoc/chat/ChatConfig.kt",
+          "line": 17,
+          "end_line": 23
+        },
+        {
+          "path": "modules/ws-backend-service-chat/src/main/kotlin/com/example/wspoc/chat/ChatProtocol.kt",
+          "line": 17,
+          "end_line": 89
+        },
+        {
+          "path": "modules/ws-backend-service-chat/src/main/kotlin/com/example/wspoc/chat/ChatRooms.kt",
+          "line": 10,
+          "end_line": 40
+        }
+      ]
+    },
+    {
+      "id": "direct-backend",
+      "type": "backend",
+      "label": "ws-backend",
+      "sublabel": ":8092 direct 프로필",
+      "tag": "JWT 자체 검증",
+      "pos": [
+        640,
+        460
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-backend-service-default/src/main/resources/application-direct.yml",
+          "line": 1,
+          "end_line": 8
+        },
+        {
+          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/auth/WsHandshakeAuthFilter.kt",
+          "line": 28,
+          "end_line": 90
+        }
+      ]
+    },
+    {
+      "id": "direct-chat",
+      "type": "backend",
+      "label": "ws-chat",
+      "sublabel": ":8093 direct 프로필",
+      "tag": "JWT 자체 검증",
+      "pos": [
+        640,
+        580
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-backend-service-chat/src/main/resources/application-direct.yml",
+          "line": 1,
+          "end_line": 8
+        },
+        {
+          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/auth/HandshakeAuthenticator.kt",
+          "line": 1,
+          "end_line": 36
+        }
+      ]
+    },
+    {
+      "id": "auth-api",
+      "type": "security",
+      "label": "auth-api",
+      "sublabel": ":8070 토큰·티켓·JWKS",
+      "tag": "RSA 서명",
+      "pos": [
+        960,
+        37
+      ],
+      "size": [
+        180,
+        70
+      ],
+      "sources": [
+        {
+          "path": "modules/auth-api/src/main/kotlin/com/example/wspoc/authapi/AuthController.kt",
+          "line": 32,
+          "end_line": 55
+        },
+        {
+          "path": "modules/auth-api/src/main/kotlin/com/example/wspoc/authapi/AuthService.kt",
+          "line": 27,
+          "end_line": 67
+        },
+        {
+          "path": "modules/auth-api/src/main/kotlin/com/example/wspoc/authapi/AuthConfig.kt",
+          "line": 15,
+          "end_line": 37
+        }
+      ]
+    },
+    {
+      "id": "lib-auth-token",
+      "type": "security",
+      "label": "auth-token",
+      "sublabel": "JWT 발급·검증 · 티켓 1회용",
+      "tag": "라이브러리",
+      "pos": [
+        330,
+        740
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/auth-token/src/main/kotlin/com/example/wspoc/auth/token/JwtVerifier.kt",
+          "line": 18,
+          "end_line": 86
+        },
+        {
+          "path": "modules/auth-token/src/main/kotlin/com/example/wspoc/auth/token/TicketReplayGuard.kt",
+          "line": 15,
+          "end_line": 55
+        },
+        {
+          "path": "modules/auth-token/src/main/kotlin/com/example/wspoc/auth/token/JwksKeySource.kt",
+          "line": 128,
+          "end_line": 139
+        }
+      ]
+    },
+    {
+      "id": "lib-ws-core",
+      "type": "backend",
+      "label": "ws-backend-core",
+      "sublabel": "세션 수명 · heartbeat · drain",
+      "tag": "라이브러리",
+      "pos": [
+        620,
+        740
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/session/ManagedSession.kt",
+          "line": 1,
+          "end_line": 249
+        },
+        {
+          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/session/DrainCoordinator.kt",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "id": "lib-ws-metrics",
+      "type": "cloud",
+      "label": "ws-metrics",
+      "sublabel": "ws.* Micrometer 메트릭",
+      "tag": "라이브러리",
+      "pos": [
+        910,
+        740
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-metrics/src/main/kotlin/com/example/wspoc/metrics/WsMeters.kt",
+          "line": 21,
+          "end_line": 174
+        },
+        {
+          "path": "modules/ws-metrics/src/main/kotlin/com/example/wspoc/metrics/EventLoopLagProbe.kt",
+          "line": 1,
+          "end_line": 81
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Relay (A): 게이트웨이 뒤, 직접 접근 차단 전제",
+      "wraps": [
+        "relay-backend",
+        "relay-chat"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Direct (B): 서비스가 핸드셰이크에서 JWT 검증",
+      "wraps": [
+        "direct-backend",
+        "direct-chat"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "공통 라이브러리 (모든 서비스·게이트웨이가 사용)",
+      "wraps": [
+        "lib-auth-token",
+        "lib-ws-core",
+        "lib-ws-metrics"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "c-relay-ws",
+      "from": "client",
+      "to": "gateway",
+      "label": "WS ?ticket=",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c-client-console",
+      "from": "client",
+      "to": "console",
+      "label": "화면 · /api/*",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "c-route-backend",
+      "from": "gateway",
+      "to": "relay-backend",
+      "label": "echo·push + X-User-Id",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c-route-chat",
+      "from": "gateway",
+      "to": "relay-chat",
+      "label": "/ws/chat + X-User-Id",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c-direct-backend",
+      "from": "client",
+      "to": "direct-backend",
+      "label": "WS ?ticket= (direct)"
+    },
+    {
+      "id": "c-direct-chat",
+      "from": "client",
+      "to": "direct-chat",
+      "label": "WS ?ticket= (direct)"
+    },
+    {
+      "id": "c-client-auth",
+      "from": "client",
+      "to": "auth-api",
+      "label": "토큰·티켓 (k6 등)",
+      "variant": "security",
+      "toSide": "top",
+      "fromSide": "left",
+      "via": [
+        [
+          18,
+          298
+        ],
+        [
+          18,
+          16
+        ],
+        [
+          1050,
+          16
+        ]
+      ]
+    },
+    {
+      "id": "c-console-auth",
+      "from": "console",
+      "to": "auth-api",
+      "label": "/api/token·ticket 중계",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "c-console-gw",
+      "from": "console",
+      "to": "gateway",
+      "label": "probe · 메트릭 수집",
+      "variant": "dashed"
+    },
+    {
+      "id": "c-gw-jwks",
+      "from": "gateway",
+      "to": "auth-api",
+      "label": "JWKS 조회",
+      "variant": "dashed",
+      "toSide": "bottom"
+    },
+    {
+      "id": "c-db-jwks",
+      "from": "direct-backend",
+      "to": "auth-api",
+      "label": "JWKS 조회",
+      "variant": "dashed"
+    },
+    {
+      "id": "c-dc-jwks",
+      "from": "direct-chat",
+      "to": "auth-api",
+      "label": "JWKS 조회",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Relay (A)",
+      "items": [
+        "WsAuth가 티켓/Bearer를 검증하고 신원 헤더를 주입",
+        "GatewayEdgeFilter가 클라이언트가 보낸 신원 헤더를 항상 제거",
+        "SCG가 101을 먼저 응답 — upstream 실패는 ws.relay.upstream.connect로 집계",
+        "/ws/public/push는 WsAuth 없는 익명 라우트"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Direct (B)",
+      "items": [
+        "direct 프로필에서 ws.auth.mode=self",
+        "WsHandshakeAuthFilter가 업그레이드 전에 401/503 거절",
+        "티켓은 1회용(TicketReplayGuard), sexp가 세션 수명 상한"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "관측",
+      "items": [
+        "브라우저는 콘솔(:8060)에서 화면과 토큰·티켓을 받고, WebSocket은 게이트웨이에 직접 연다",
+        "게이트웨이·서비스 모두 /actuator/prometheus 노출",
+        "ws-console 모니터링 탭이 대상들을 대신 긁어 브라우저에서 계산"
+      ]
+    }
+  ]
+}

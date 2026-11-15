@@ -27,6 +27,23 @@ B. Direct  클라이언트 ─────────────────�
 - **서비스는 공통 런타임 위에 얹는다.** WebSocket 서비스는 `@WsEndpoint`를 붙인 핸들러와 메시지 처리 로직만 작성하고, 인증·heartbeat·만료·drain·메트릭은 `ws-backend-core`가 맡는다. echo/push(`ws-backend`)와 채팅(`ws-chat`) 두 서비스가 그 예다.
 - **direct는 비교용 구성이다.** 같은 서비스를 `direct` 프로필로 띄우면 게이트웨이 없이 서비스가 JWT를 직접 검증한다.
 
+### 아키텍처 다이어그램
+
+![WebSocket PoC 아키텍처: Relay와 Direct 흐름](docs/archify/websocket-poc-architecture.gif)
+
+- 인터랙티브 다이어그램(HTML): [`docs/archify/websocket-poc-architecture.html`](docs/archify/websocket-poc-architecture.html). 내려받아 브라우저로 연다. 데이 테마와 흐름 애니메이션(Live)으로 시작하고, 노드를 누르면 근거 소스 위치가 보인다.
+- 흐름 애니메이션 원본(WebM, 약 6초): [`docs/archify/websocket-poc-architecture.webm`](docs/archify/websocket-poc-architecture.webm)
+- 다이어그램 원본: [`docs/archify/websocket-poc-architecture.json`](docs/archify/websocket-poc-architecture.json)([archify](https://github.com/tt-a1i/archify) 입력)
+
+구조가 바뀌면 JSON을 고친 뒤 다시 만든다(gifski 필요: `brew install gifski`).
+
+```bash
+archify finalize architecture docs/archify/websocket-poc-architecture.json docs/archify/websocket-poc-architecture.html --repo-root . --quality showcase --out-dir "$TMPDIR/archify-receipts"
+rm docs/archify/*.delivery.json                                                   # 검사 영수증. 로컬 절대 경로가 들어 있다
+node scripts/archify-defaults.mjs docs/archify/websocket-poc-architecture.html   # 초기 상태: 데이 테마 + Live
+node scripts/archify-gif.mjs docs/archify/websocket-poc-architecture.html docs/archify/websocket-poc-architecture.gif
+```
+
 ## 구현 완료 내용
 
 | 영역 | 내용 |
