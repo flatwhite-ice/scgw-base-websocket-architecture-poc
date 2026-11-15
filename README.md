@@ -32,7 +32,7 @@ B. Direct  클라이언트 ─────────────────�
 ![WebSocket PoC 아키텍처: Relay와 Direct 흐름](docs/archify/websocket-poc-architecture.gif)
 
 - 인터랙티브 다이어그램(HTML): [`docs/archify/websocket-poc-architecture.html`](docs/archify/websocket-poc-architecture.html). 내려받아 브라우저로 연다. 데이 테마와 흐름 애니메이션(Live)으로 시작하고, 노드를 누르면 근거 소스 위치가 보인다.
-- 흐름 애니메이션 원본(WebM, 약 6초): [`docs/archify/websocket-poc-architecture.webm`](docs/archify/websocket-poc-architecture.webm)
+- 흐름 애니메이션(GIF, 6.4초 반복): [`docs/archify/websocket-poc-architecture.gif`](docs/archify/websocket-poc-architecture.gif)
 - 다이어그램 원본: [`docs/archify/websocket-poc-architecture.json`](docs/archify/websocket-poc-architecture.json)([archify](https://github.com/tt-a1i/archify) 입력)
 
 구조가 바뀌면 JSON을 고친 뒤 다시 만든다(gifski 필요: `brew install gifski`).
