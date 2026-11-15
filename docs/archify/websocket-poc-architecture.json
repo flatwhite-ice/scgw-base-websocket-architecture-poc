@@ -14,17 +14,43 @@
   },
   "components": [
     {
-      "id": "client",
+      "id": "browser",
       "type": "external",
-      "label": "클라이언트",
-      "sublabel": "브라우저 / k6 · websocat",
+      "label": "브라우저",
+      "sublabel": "ws-console 화면",
       "pos": [
         40,
         250
       ],
       "size": [
         150,
-        96
+        64
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "CLI 클라이언트",
+      "sublabel": "curl · websocat · WsSmoke",
+      "pos": [
+        40,
+        460
+      ],
+      "size": [
+        170,
+        80
+      ],
+      "sources": [
+        {
+          "path": "scripts/WsSmoke.java",
+          "line": 1,
+          "end_line": 40
+        },
+        {
+          "path": "docs/ws-cli-testing.md",
+          "line": 26,
+          "end_line": 55
+        }
       ]
     },
     {
@@ -357,14 +383,22 @@
   "connections": [
     {
       "id": "c-relay-ws",
-      "from": "client",
+      "from": "browser",
       "to": "gateway",
       "label": "WS ?ticket=",
       "variant": "emphasis"
     },
     {
+      "id": "c-cli-relay",
+      "from": "cli",
+      "to": "gateway",
+      "label": "WS ?ticket=",
+      "variant": "emphasis",
+      "toSide": "bottom"
+    },
+    {
       "id": "c-client-console",
-      "from": "client",
+      "from": "browser",
       "to": "console",
       "label": "화면 · /api/*",
       "variant": "emphasis",
@@ -387,28 +421,28 @@
     },
     {
       "id": "c-direct-backend",
-      "from": "client",
+      "from": "cli",
       "to": "direct-backend",
-      "label": "WS ?ticket= (direct)"
+      "label": "WS ?ticket="
     },
     {
       "id": "c-direct-chat",
-      "from": "client",
+      "from": "cli",
       "to": "direct-chat",
-      "label": "WS ?ticket= (direct)"
+      "label": "WS ?ticket="
     },
     {
-      "id": "c-client-auth",
-      "from": "client",
+      "id": "c-cli-auth",
+      "from": "cli",
       "to": "auth-api",
-      "label": "토큰·티켓 (k6 등)",
+      "label": "토큰 · 티켓 발급",
       "variant": "security",
       "toSide": "top",
       "fromSide": "left",
       "via": [
         [
           18,
-          298
+          500
         ],
         [
           18,
@@ -483,7 +517,7 @@
       "dot": "amber",
       "title": "관측",
       "items": [
-        "브라우저는 콘솔(:8060)에서 화면과 토큰·티켓을 받고, WebSocket은 게이트웨이에 직접 연다",
+        "브라우저는 auth-api를 직접 부르지 않는다: 콘솔(:8060)이 같은 origin에서 토큰·티켓을 중계하고, WebSocket은 게이트웨이에만 연다",
         "게이트웨이·서비스 모두 /actuator/prometheus 노출",
         "ws-console 모니터링 탭이 대상들을 대신 긁어 브라우저에서 계산"
       ]
