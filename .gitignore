@@ -38,3 +38,6 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+# archify 작업 폴더(중간 산출물, 검사 영수증에 로컬 절대 경로가 들어 있다). 결과물은 docs/archify/에 둔다.
+.archify/
