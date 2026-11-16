@@ -5,6 +5,8 @@ plugins {
 dependencies {
     implementation(project(":modules:auth-token"))
     implementation(project(":modules:ws-metrics"))
+    // 서비스 런타임(ws-backend-core)과 함께 쓰는 부품(D32). core 자체에는 의존하지 않는다.
+    implementation(project(":modules:ws-server-support"))
     // /actuator/prometheus로 공통 메트릭을 내보낸다(D27).
     implementation(libs.spring.boot.starter.actuator)
     runtimeOnly(libs.micrometer.registry.prometheus)

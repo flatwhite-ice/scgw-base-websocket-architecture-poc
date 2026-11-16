@@ -2,6 +2,7 @@ package com.example.wspoc.backend
 
 import com.example.wspoc.metrics.EventLoopLagProbe
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import io.micrometer.core.instrument.MeterRegistry
@@ -10,9 +11,7 @@ import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient
 import reactor.core.publisher.Flux
 import java.net.URI
@@ -25,11 +24,7 @@ import kotlin.test.assertTrue
 /**
  * 공통 메트릭(D27)이 실제 세션에서 올라가는지 확인한다. 컨텍스트가 다른 테스트와 공유될 수 있으므로 절댓값이 아니라 증가분을 본다.
  */
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
-)
-@Import(TestAuthConfig::class)
+@SelfModeWsTest
 class MetricsTest(
     @LocalServerPort private val port: Int,
     @Autowired private val registry: MeterRegistry,

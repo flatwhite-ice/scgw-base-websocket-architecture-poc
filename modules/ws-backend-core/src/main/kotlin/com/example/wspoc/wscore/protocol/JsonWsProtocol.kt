@@ -1,4 +1,4 @@
-package com.example.wspoc.wscore.session
+package com.example.wspoc.wscore.protocol
 
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper

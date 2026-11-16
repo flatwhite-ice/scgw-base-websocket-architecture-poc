@@ -272,13 +272,13 @@
       "type": "security",
       "label": "auth-token",
       "sublabel": "JWT 발급·검증 · 티켓 1회용",
-      "tag": "라이브러리",
+      "tag": "전체가 사용",
       "pos": [
-        330,
+        170,
         740
       ],
       "size": [
-        190,
+        200,
         64
       ],
       "sources": [
@@ -300,43 +300,17 @@
       ]
     },
     {
-      "id": "lib-ws-core",
-      "type": "backend",
-      "label": "ws-backend-core",
-      "sublabel": "세션 수명 · heartbeat · drain",
-      "tag": "라이브러리",
-      "pos": [
-        620,
-        740
-      ],
-      "size": [
-        190,
-        64
-      ],
-      "sources": [
-        {
-          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/session/ManagedSession.kt",
-          "line": 1,
-          "end_line": 249
-        },
-        {
-          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/session/DrainCoordinator.kt",
-          "line": 21
-        }
-      ]
-    },
-    {
       "id": "lib-ws-metrics",
       "type": "cloud",
       "label": "ws-metrics",
       "sublabel": "ws.* Micrometer 메트릭",
-      "tag": "라이브러리",
+      "tag": "서비스 · 게이트웨이",
       "pos": [
-        910,
+        430,
         740
       ],
       "size": [
-        190,
+        200,
         64
       ],
       "sources": [
@@ -349,6 +323,43 @@
           "path": "modules/ws-metrics/src/main/kotlin/com/example/wspoc/metrics/EventLoopLagProbe.kt",
           "line": 1,
           "end_line": 81
+        }
+      ]
+    },
+    {
+      "id": "lib-ws-support",
+      "type": "backend",
+      "label": "ws-server-support",
+      "sublabel": "drain · 핸드셰이크 · 로그 표기",
+      "tag": "서비스 · 게이트웨이",
+      "pos": [
+        690,
+        740
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "lib-ws-core",
+      "type": "backend",
+      "label": "ws-backend-core",
+      "sublabel": "서비스 런타임 · 세션 수명 · heartbeat",
+      "tag": "서비스 전용",
+      "pos": [
+        950,
+        740
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": "modules/ws-backend-core/src/main/kotlin/com/example/wspoc/wscore/session/ManagedSession.kt",
+          "line": 1,
+          "end_line": 249
         }
       ]
     }
@@ -372,11 +383,12 @@
     },
     {
       "kind": "region",
-      "label": "공통 라이브러리 (모든 서비스·게이트웨이가 사용)",
+      "label": "공통 라이브러리",
       "wraps": [
         "lib-auth-token",
-        "lib-ws-core",
-        "lib-ws-metrics"
+        "lib-ws-metrics",
+        "lib-ws-support",
+        "lib-ws-core"
       ]
     }
   ],
@@ -520,6 +532,16 @@
         "브라우저는 auth-api를 직접 부르지 않는다: 콘솔(:8060)이 같은 origin에서 토큰·티켓을 중계하고, WebSocket은 게이트웨이에만 연다",
         "게이트웨이·서비스 모두 /actuator/prometheus 노출",
         "ws-console 모니터링 탭이 대상들을 대신 긁어 브라우저에서 계산"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "공통 라이브러리",
+      "items": [
+        "auth-token: JWT 발급·검증, 1회용 티켓, 신원 헤더",
+        "ws-metrics: ws.* 메트릭 정의",
+        "ws-server-support: 서비스와 게이트웨이가 함께 쓰는 drain, 핸드셰이크 자격증명, close 상태, 세션 로그 표기(D32)",
+        "ws-backend-core: 서비스 런타임. 게이트웨이는 의존하지 않는다"
       ]
     }
   ]

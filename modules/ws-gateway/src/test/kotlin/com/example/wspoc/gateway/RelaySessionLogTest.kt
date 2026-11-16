@@ -1,5 +1,6 @@
 package com.example.wspoc.gateway
 
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
@@ -20,7 +21,7 @@ import kotlin.test.assertTrue
 
 /** 게이트웨이 relay 세션 로그(`ws.session`, D21): 라우트, 사용자, 고른 backend, 종료 코드, active 수. 티켓은 남기지 않는다. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(GatewayE2ETest.TestAuthConfig::class)
+@Import(TestKeySourceConfig::class)
 @ExtendWith(OutputCaptureExtension::class)
 class RelaySessionLogTest(
     @LocalServerPort private val port: Int,

@@ -1,8 +1,8 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.auth.token.KeySource
 import com.example.wspoc.metrics.EventLoopLagProbe
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import io.micrometer.core.instrument.MeterRegistry
@@ -11,9 +11,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -29,17 +27,11 @@ import kotlin.test.assertTrue
  * upstream 연결 실패("101 뒤 1002")가 어떻게 집계되는지도 본다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(GatewayMetricsTest.TestAuthConfig::class)
+@Import(TestKeySourceConfig::class)
 class GatewayMetricsTest(
     @LocalServerPort private val port: Int,
     @Autowired private val registry: MeterRegistry,
 ) {
-    @TestConfiguration(proxyBeanMethods = false)
-    class TestAuthConfig {
-        @Bean
-        fun testKeySource(): KeySource = TestKeys.keySource
-    }
-
     companion object {
         /** 열었다 닫은 포트: 연결하면 바로 거절된다. */
         private val deadPort = ServerSocket(0).use { it.localPort }

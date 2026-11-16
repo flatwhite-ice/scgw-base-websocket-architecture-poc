@@ -524,3 +524,22 @@ ws-console을 뺀 모듈을 정리했다. 외부에서 보이는 동작(엔드�
 - **달라진 동작 하나:** 서비스가 PONG을 받은 것을 프로토콜 콜백 순서와 무관하게 수신 즉시 기록한다. 이전에는 프레임을 순서대로 넘기는 흐름 안에서 기록해서, 프로토콜이 오래 걸리면 PONG 확인도 함께 밀렸다. heartbeat가 살아 있는 연결을 3008로 끊을 여지가 줄어든다. 이 경우를 재현하는 테스트는 따로 만들지 않았다.
 - **하지 않은 것:** core의 `DrainCoordinator`와 게이트웨이의 `GatewayDrainCoordinator`, 두 `MaskedAccessLogConfig`는 모양이 거의 같지만 그대로 두었다. 둘이 함께 쓸 Spring 의존 모듈이 없고, 하나를 만들 만큼 크지 않다.
 
+
+## D32. 공유 모듈 `ws-server-support`와 구조 정리 (2026-11-17)
+
+Kotlin 코드를 다시 정리했다. 설정 키(`ws.*`, `ws.gateway.*`), 메트릭 이름과 태그, `ws.session` 로그 형식, 엔드포인트, 메시지 형식, yml은 바뀌지 않는다.
+
+- **공유 모듈을 만들었다(D31의 "하지 않은 것"을 뒤집는다).** core와 게이트웨이에 같은 코드가 두 벌씩 있었다. 게이트웨이는 core에 의존할 수 없다(core의 AutoConfiguration이 게이트웨이에 붙으면 안 된다). D31에서는 "하나를 만들 만큼 크지 않다"고 두었지만, 겹치는 조각이 drain 말고도 여섯 군데라 모듈 하나로 모았다.
+  - `drain`: `DrainState`(두 클래스가 완전히 같았다), `DrainCoordinator`(닫는 방법만 달랐다). 무엇을 어떻게 닫는지는 `DrainTarget`이 정한다. core `SessionRegistry`는 세션 코루틴에 close를 맡기고, 게이트웨이 `RelaySessionRegistry`는 클라이언트 세션을 취소 불가로 닫는다(D9).
+  - `accesslog`: `MaskedAccessLogAutoConfiguration`. 같은 파일이 두 개 있었다.
+  - `handshake`: `JwtVerifier.verifyHandshake(request)`, `TICKET_PARAM`, `completeWith(status)`, `exchange.handshakeTrace`
+  - `session`: `closeStatusOrNoStatus()`, `SessionLogFormat`
+  - `metrics`: `ServerMetrics`
+- **원칙: 이 모듈은 빈을 스스로 등록하지 않는다.** 일반 클래스와 함수만 두고, 빈 등록은 core의 AutoConfiguration과 게이트웨이의 `GatewayConfig`가 한다. 그래야 게이트웨이 컨텍스트에 원치 않는 빈이 붙지 않고, 설정 키도 각자 것을 그대로 쓴다. 예외는 access log 하나다: 설정 키(`ws.access-log.enabled`)와 형식이 양쪽에서 같아서 AutoConfiguration으로 두었다. 게이트웨이 테스트의 제외 목록에서 이 항목을 뺐다.
+- **합치지 않은 것:** JWKS·`JwtVerifier` 빈 구성(두 줄이고 조건식이 다르다), `WsProperties`와 `GatewayProperties`(설정 키를 유지한다), 두 레지스트리(담는 타입이 다르다).
+- **core 패키지:** `protocol`(서비스가 구현하고 쓰는 API: `WsSessionProtocol`, `WsSessionContext`, `JsonWsProtocol`)을 `session`(런타임)에서 떼어 냈다. `protocol`은 `session`을 import하지 않는다. `WsSessionRuntime`은 별도 파일로 뺐다. `ManagedSession.kt`의 내부 구성은 D31 그대로다.
+- **그 밖의 분리:** 게이트웨이 `RelayLogContext` → `RelayContext`(로그와 메트릭 태그에 함께 쓰인다). ws-console `ConsoleController.probe` → `ProbeService`(자격증명 종류는 `ProbeCredential` enum), `MetricsSnapshot.kt`. auth-api `AuthExceptions.kt`. 본 코드의 SLF4J 직접 사용을 kotlin-logging으로 바꿨다.
+- **테스트:** 5곳에 있던 테스트용 KeySource 설정을 core testFixtures의 `TestKeySourceConfig`로, 12곳에서 반복되던 self 모드 `@SpringBootTest` 설정을 `@SelfModeWsTest`로 모았다. 테스트 파일의 위치와 검증 내용은 그대로다. `DrainCoordinatorTest`(단위 테스트 3개)를 추가했다.
+- **달라진 것 두 가지.**
+  - drain 운영 로그: 로거가 `com.example.wspoc.support.drain.DrainCoordinator` 하나가 됐고 문구는 `Draining N <대상> over <window>`, `Drain finished, N <대상> still open`이다. 대상은 서비스가 `WebSocket sessions`, 게이트웨이가 `relayed WebSocket sessions`다. 이전의 `Gateway draining …` 접두어는 없다.
+  - ws-console probe의 400: 컨트롤러의 `ResponseStatusException` 대신 서비스가 `@ResponseStatus(400)` 예외(`InvalidProbeRequestException`)를 던진다. 상태 코드와 메시지 문구는 같다.

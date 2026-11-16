@@ -58,8 +58,15 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
   - `HandshakeTrace`(`Handshake.kt`): 핸드셰이크 한 건의 측정. 필터가 exchange attribute `HandshakeTrace.ATTRIBUTE`에 넣고, 결과가 정해지는 곳에서 `record`를 부른다(처음 기록만 남는다).
   - `EventLoopLagProbe`: `ws.eventloop.lag`. 예약한 작업이 늦게 실행된 시간을 잰다(`pool` = `netty`/`parallel`).
   - `/actuator/prometheus`로 내보낸다(ws-backend, ws-chat, ws-gateway). 프로세스는 `application` 태그로 구분한다.
+- **ws-server-support**(라이브러리, 패키지 `com.example.wspoc.support`, D32): 서비스 런타임(`ws-backend-core`)과 게이트웨이가 함께 쓰는 부품. 게이트웨이는 core에 의존하지 않으므로 따로 뺐다.
+  - 빈을 스스로 등록하지 않는 일반 클래스와 함수만 둔다. 빈 등록은 core의 AutoConfiguration과 게이트웨이의 `GatewayConfig`가 한다. 예외는 `MaskedAccessLogAutoConfiguration`(`ws.access-log.enabled`) 하나다.
+  - `drain`: `DrainState`, `DrainCoordinator`(SmartLifecycle). 무엇을 어떻게 닫는지는 `DrainTarget`이 정한다(core `SessionRegistry`, 게이트웨이 `RelaySessionRegistry`가 구현).
+  - `handshake`: `JwtVerifier.verifyHandshake(request)`(`?ticket=`과 `Authorization` 추출), `TICKET_PARAM`, `exchange.completeWith(status)`, `exchange.handshakeTrace`
+  - `session`: `closeStatusOrNoStatus()`(close 상태를 잠깐 기다리고 없으면 1005), `SessionLogFormat`(로거 이름 `ws.session`과 공통 표기)
+  - `metrics`: `ServerMetrics`(event loop 지연 probe 생성, Netty 서버 메트릭 customizer)
 - **auth-api**: `/auth/token`(선택 `ttlSeconds`, 1..access-token-ttl, 3000 만료 테스트용, D23), `/auth/ws-ticket`(Bearer access token 필요. 티켓에는 access token 만료 시각을 담은 `sexp` 클레임이 있고, 이것이 WS 세션 수명의 상한이 된다), `/.well-known/jwks.json`
 - **ws-backend-core**(라이브러리, 패키지 `com.example.wspoc.wscore`, AutoConfiguration으로 등록, D17): 모든 WebSocket 서비스가 공유하는 런타임
+  - 패키지(D32): `protocol`은 서비스가 구현하고 쓰는 API(`WsSessionProtocol`, `WsSessionContext`, `JsonWsProtocol`), `session`은 세션 런타임, `auth`는 핸드셰이크 인증, `endpoint`는 `@WsEndpoint` 등록이다. `protocol`은 `session`에 의존하지 않는다.
   - 엔드포인트는 `@WsEndpoint("/ws/...")`를 붙인 `WebSocketHandler` 빈이다(클래스 또는 `@Bean` 메서드). `auth = WsEndpoint.Auth.NONE`이면 익명 엔드포인트가 된다: 핸드셰이크 인증과 3000 만료가 없지만 heartbeat와 drain은 그대로 적용된다(D20). `WsEndpointHandlerMapping`이 기동 시 이들을 모으고 경로가 중복되면 바로 실패한다(D16). WebFlux의 raw WebSocket에는 `@RequestMapping` 모델이 없고, STOMP는 Servlet 전용이다.
   - `WsHandshakeAuthFilter`는 **업그레이드 전에** 401(drain 중이면 503)로 거절한다. principal은 `exchange.mutate().principal()`로 넘기고, 핸들러는 `HandshakeInfo.principal`로 읽는다.
   - `ManagedWsHandler`는 세션마다 `ManagedSession`을 만들어 코루틴 하나로 돌린다. 수명 관리 코드는 모두 `ManagedSession.kt`에 있다(송신, 수신, 수명, 프로토콜 예외, 종료 기록 순). 서비스는 세션별 `WsSessionProtocol`(`onOpen`/`onText`/`onClose`)만 제공하면 된다. 보통은 `JsonWsProtocol`을 쓰며, 모든 서비스가 같은 `{"type":...}` 분기와 오류 응답을 갖게 된다. 수명 관리에 포함되는 것:
@@ -68,7 +75,7 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
     - 토큰이 만료되면 3000(Unauthorized)으로 닫는다
     - 프로토콜 콜백이나 `session.scope`에 띄운 코루틴이 예외를 던지면 그 세션만 1011(Internal Error)로 닫는다(D24)
     - 메트릭(D27): 엔드포인트별 활성 세션, 메시지 수, 버린 메시지 수, close 코드, 세션 수명. 핸드셰이크는 필터(거절)와 `HandshakeMeteringWebSocketService`(성공)가 기록한다
-    - `DrainCoordinator`(SmartLifecycle)가 종료 시 세션을 1001(Going Away)과 jitter로 닫는다. 핸드셰이크 검사 뒤에 drain이 시작돼 snapshot에 못 든 세션은 등록 직후 스스로 1001로 닫는다(D24)
+    - `DrainCoordinator`(ws-server-support, SmartLifecycle)가 종료 시 세션을 1001(Going Away)과 jitter로 닫는다. 핸드셰이크 검사 뒤에 drain이 시작돼 snapshot에 못 든 세션은 등록 직후 스스로 1001로 닫는다(D24)
   - 모든 close 코드는 `CloseCodes`에 있고 RFC 6455 §7.4에 맞아야 한다: 1000–1003, 1007–1011, 3000–4999(D13). `CloseCodesRfc6455Test`가 강제한다. SCG는 relay 경로에서 그 밖의 코드(예: 1012–1014)를 1002로 바꾼다(D14).
 - **ws-backend**(`modules/ws-backend-service-default`): `EchoPushProtocol`(echo/subscribe/unsubscribe). 서비스 설정은 `PushProperties`(`ws.push`)다.
 - **ws-chat**(`modules/ws-backend-service-chat`): `ChatProtocol`(join/say/leave). `ChatRooms`의 join/leave는 모두 `compute` 안에서 set을 바꾼다(밖에서 바꾸면 빈 방 삭제와 경합한다, D24). `ChatRooms`는 인스턴스별 메모리라 여러 대를 띄우면 방이 쪼개진다. 인스턴스 간 fan-out은 후속 과제다(D18).
@@ -85,7 +92,7 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
   - `static` 프로필(`application-static.yml`)은 실험 E3용으로 `${WS_BACKEND_URI}`와 `${WS_CHAT_URI}`로 보낸다. 프로필은 라우트 목록 전체를 교체하므로, 덮어쓸 때는 모든 라우트를 다시 정의한다.
   - relay 세션을 다루는 코드는 `gateway.relay` 패키지에 있다. `RelaySessionTracking`(BeanPostProcessor)이 SCG의 빈 두 개를 감싼다: `WebSocketService` → `TrackingWebSocketService`(세션 등록, drain, 프레임 수, close 코드, 로그), `WebSocketClient` → `TrackingWebSocketClient`(upstream 연결).
   - 메트릭(D27): 위 두 클래스가 잰다. SCG는 101을 먼저 응답하므로 upstream 실패는 `ws.handshake`가 아니라 `ws.relay.upstream.connect{result=error}`에 나온다.
-  - `GatewayDrainCoordinator`는 종료 시 relay 중인 세션을 1001과 jitter로 닫는다. SCG는 세션을 외부에 노출하지 않으므로 `TrackingWebSocketService`가 세션을 등록한다. SCG 자체 필터는 건드리지 않는다. 503 검사 뒤에 drain이 시작된 업그레이드는 upstream을 열지 않고 바로 1001로 닫는다(D24).
+  - 종료 시 `DrainCoordinator`(ws-server-support, `GatewayConfig`가 등록)가 relay 중인 세션을 1001과 jitter로 닫는다. SCG는 세션을 외부에 노출하지 않으므로 `TrackingWebSocketService`가 세션을 등록한다. SCG 자체 필터는 건드리지 않는다. 503 검사 뒤에 drain이 시작된 업그레이드는 upstream을 열지 않고 바로 1001로 닫는다(D24).
 - **ws-console**(:8060, 개발 도구, D23): 빌드 없는 vanilla JS 화면(`src/main/resources/static/`)을 서빙하는 WebFlux 앱이다. 게이트웨이를 대상으로 ws-backend/ws-chat의 모든 케이스를 눌러 볼 수 있다.
   - 브라우저는 `console.ws-base`에 `?ticket=`으로 WebSocket을 직접 연다.
   - 화면 구조(D25): `core.js`(타임라인, 연결, 패널, 프레임 표시)와 `app.js`(시나리오별 규칙과 데모)다. 타임라인의 한 줄은 "화면에 보이는 것(view)"과 "오간 프레임(wire)"을 함께 갖고, 보기 방식(나란히/교차/화면/프로토콜)은 `data-mode`와 CSS만으로 바뀐다. 색은 `style.css`의 토큰이고 `html[data-theme]`으로 데이/나이트를 바꾼다.
@@ -94,14 +101,14 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
   - 토큰과 티켓은 `/api/token`, `/api/ticket`이 auth-api로 중계한다. 그래서 auth-api에 CORS가 필요 없다.
   - 모니터링 탭(D28): `/api/metrics`가 `console.monitor.targets`의 `/actuator/prometheus`를 대신 긁어 지금 값만 JSON으로 준다(`MetricsScraper`, `PrometheusText`). 저장소는 없고, 기록과 계산(초당 값, 구간 합계, p99)은 `monitor.js`가 브라우저에서 한다. 전체 수치는 게이트웨이 기준이다(relay에서는 연결이 게이트웨이와 서비스에 한 번씩 잡힌다). 차트는 라이브러리 없는 SVG이고 색은 대상 순서로 고정이다(`--s1`…). 새 메트릭 제언은 `docs/metrics-proposals.md`에 있다.
   - `/api/metrics` 응답은 `MetricsSnapshot.toJson`이 직접 쓴다. Jackson 바인딩은 kotlin-reflect가 event loop에서 jar를 읽게 만든다(D28).
-  - `/api/probe`는 서버에서 핸드셰이크를 시도해 실제 HTTP 상태를 돌려준다. 브라우저는 업그레이드가 거절돼도 1006만 보기 때문이다. `/ws/...` 경로만 받고, 호스트와 query는 서버가 정한다.
+  - `/api/probe`(`ProbeService`)는 서버에서 핸드셰이크를 시도해 실제 HTTP 상태를 돌려준다. 브라우저는 업그레이드가 거절돼도 1006만 보기 때문이다. `/ws/...` 경로만 받고, 호스트와 query는 서버가 정한다.
 
 ## 규칙과 주의할 점
 
 - **event loop를 절대 막지 않는다.** 모든 테스트 JVM에서 BlockHound가 돈다. 피할 수 없는 블로킹은 `Dispatchers.IO`/`boundedElastic`으로 격리하고 이유를 주석으로 남긴다. 1회성 클래스 초기화 예외는 `modules/auth-token/src/testFixtures/.../WsPocBlockHoundIntegration.kt`에 항목마다 이유와 함께 넣는다.
 - 핸들러는 `suspend`/`Flow`로 작성하고, Reactor와의 변환은 경계에서만 한다. `WebSocketMessage` payload는 `receive().map{}` 안에서 동기적으로 변환한다. Reactor Netty가 `onNext` 직후 버퍼를 해제하기 때문이다.
 - `session.close()`는 `withContext(NonCancellable)`로 감싼다. 쓰는 도중 취소되면 close 프레임이 사라지고 클라이언트는 1006을 받는다(D9).
-- 로깅: 메시지 단위 로그는 남기지 않는다. 세션 열림/종료 로그는 전용 `ws.session` 로거에 INFO로 남기고 기본은 켜져 있다(core의 `SessionLog`, gateway의 `RelaySessionLog`, D21). 연결 단위 로그는 결과를 왜곡하므로 부하 테스트에서는 `logging.level.ws.session=WARN`으로 끈다. URI는 경로만 남기고 query(`ticket=`)는 절대 남기지 않는다. access log는 선택(`ws.access-log.enabled`)이고 `ticket=`을 마스킹한다.
+- 로깅: 메시지 단위 로그는 남기지 않는다. 세션 열림/종료 로그는 전용 `ws.session` 로거에 INFO로 남기고 기본은 켜져 있다(core의 `SessionLog`, gateway의 `RelaySessionLog`, 공통 표기는 ws-server-support의 `SessionLogFormat`, D21). 연결 단위 로그는 결과를 왜곡하므로 부하 테스트에서는 `logging.level.ws.session=WARN`으로 끈다. URI는 경로만 남기고 query(`ticket=`)는 절대 남기지 않는다. access log는 선택(`ws.access-log.enabled`)이고 `ticket=`을 마스킹한다.
 - 메트릭 태그에는 값의 개수가 한정된 것만 쓴다(D27). userId, 방 이름, 세션 id, 요청 경로 원문은 쓰지 않는다. 경로는 매칭된 `@WsEndpoint` 선언 경로나 라우트 id로, close 코드는 `WsMeters.closeCodeTag`로 바꾼다. 메시지마다 하는 계측은 Counter 증가까지만 한다.
 - WebSocket 업그레이드에서 필터 체인은 101이 나간 시점에 완료된다(세션 종료 시점이 아니다). 응답 객체의 상태 코드는 101이 되지 않는다.
 - drain 상태는 `start()`에서 꺼진다. Spring 테스트가 컨텍스트를 멈췄다가 재사용하기 때문이다(D27).
@@ -111,8 +118,9 @@ smoke 스크립트는 주소마다 그 주소가 제공하는 서비스만 확�
 - SCG는 `GlobalFilter`의 순서를 `Ordered` 구현으로만 읽는다. `@Bean` 메서드의 `@Order`는 무시되고, 순서 없는 필터는 `WebsocketRoutingFilter` 뒤로 밀려 WebSocket 요청에서는 실행되지 않는다.
 - 테스트:
   - `ws-backend-core`의 `testFixtures`가 `TestKeys`(auth-api 대역)와 `WsTestClient`를 제공한다. 서비스와 게이트웨이 테스트가 재사용한다.
+  - self 모드 서비스 테스트는 `@SelfModeWsTest`(랜덤 포트, `ws.auth.mode=self`, JWKS 끔, `TestKeySourceConfig`)를 붙인다. 테스트마다 다른 설정은 `@TestPropertySource(properties = [...])`로 더한다. 게이트웨이 테스트는 `@Import(TestKeySourceConfig::class)`만 쓴다(D32).
   - 게이트웨이 E2E 테스트는 같은 JVM에서 실제 서비스를 띄운다: `RelayBackend`와 `RelayChat`이고 둘 다 `RelayApp`의 인스턴스다. 각자 받은 핸드셰이크를 기록하므로 테스트가 라우팅을 확인할 수 있다. 게이트웨이 yml을 읽지 않도록 `spring.config.name=ws-backend-e2e`를 쓴다.
-  - 서비스들이 게이트웨이 테스트 classpath에 있으므로, 게이트웨이의 `src/test/resources/application.properties`가 core AutoConfiguration(`WsCoreAutoConfiguration`, `WsMetricsAutoConfiguration`, `MaskedAccessLogConfig`)을 게이트웨이 컨텍스트에서 제외한다. core에 AutoConfiguration을 추가하면 여기에도 추가한다. 스캔되는 테스트 패키지의 보조 Spring 설정은 `@TestConfiguration`이어야 한다.
+  - 서비스들이 게이트웨이 테스트 classpath에 있으므로, 게이트웨이의 `src/test/resources/application.properties`가 core AutoConfiguration(`WsCoreAutoConfiguration`, `WsMetricsAutoConfiguration`)을 게이트웨이 컨텍스트에서 제외한다. core에 AutoConfiguration을 추가하면 여기에도 추가한다. ws-server-support의 access log AutoConfiguration은 게이트웨이에도 붙어야 하므로 제외하지 않는다. 스캔되는 테스트 패키지의 보조 Spring 설정은 `@TestConfiguration`이어야 한다.
   - KDoc 안에 `/**`를 쓰지 않는다. Kotlin 중첩 주석이 열린다.
 - 모든 코드 주석(KDoc, `//`, yml/toml의 `#`)은 한국어로 쓴다. 식별자, 설정 키, close 코드, RFC 절 이름은 그대로 둔다.
 - 현재 마일스톤 범위 안에서 작업한다. 후속 과제는 `docs/progress.md`의 "후속 과제"에 기록한다.

@@ -1,8 +1,9 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.gateway.relay.GatewayDrainCoordinator
 import com.example.wspoc.gateway.relay.RelaySessionRegistry
+import com.example.wspoc.support.drain.DrainCoordinator
 import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.CompletableDeferred
@@ -28,11 +29,11 @@ import kotlin.test.assertTrue
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = ["ws.gateway.drain.window=500ms"],
 )
-@Import(GatewayE2ETest.TestAuthConfig::class)
+@Import(TestKeySourceConfig::class)
 @DirtiesContext
 class GatewayDrainTest(
     @LocalServerPort private val port: Int,
-    @Autowired private val drain: GatewayDrainCoordinator,
+    @Autowired private val drain: DrainCoordinator,
     @Autowired private val relaySessions: RelaySessionRegistry,
 ) {
     companion object {

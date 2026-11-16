@@ -1,6 +1,6 @@
 package com.example.wspoc.chat
 
-import com.example.wspoc.wscore.session.WsSessionContext
+import com.example.wspoc.wscore.protocol.WsSessionContext
 import java.util.concurrent.ConcurrentHashMap
 
 /**

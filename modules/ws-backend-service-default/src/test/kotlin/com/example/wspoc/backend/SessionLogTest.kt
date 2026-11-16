@@ -1,17 +1,17 @@
 package com.example.wspoc.backend
 
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.extension.ExtendWith
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
+import org.springframework.test.context.TestPropertySource
 import java.net.URI
 import java.time.Duration
 import kotlin.test.Test
@@ -23,11 +23,8 @@ import kotlin.test.assertTrue
 /** 세션 열림/종료 로그(`ws.session`, D21): 세션 id, 사용자, 종료 코드와 주체, active 수를 남기고 티켓은 남기지 않는다. */
 class SessionLogTest {
     @Nested
-    @SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "ws.instance-id=session-log"],
-    )
-    @Import(TestAuthConfig::class)
+    @SelfModeWsTest
+    @TestPropertySource(properties = ["ws.instance-id=session-log"])
     @ExtendWith(OutputCaptureExtension::class)
     inner class Enabled(
         @LocalServerPort val port: Int,
@@ -79,11 +76,8 @@ class SessionLogTest {
     }
 
     @Nested
-    @SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "logging.level.ws.session=WARN"],
-    )
-    @Import(TestAuthConfig::class)
+    @SelfModeWsTest
+    @TestPropertySource(properties = ["logging.level.ws.session=WARN"])
     @ExtendWith(OutputCaptureExtension::class)
     inner class Disabled(
         @LocalServerPort val port: Int,

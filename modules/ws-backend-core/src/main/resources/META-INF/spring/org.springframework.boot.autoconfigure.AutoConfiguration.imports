@@ -1,3 +1,2 @@
 com.example.wspoc.wscore.WsCoreAutoConfiguration
 com.example.wspoc.wscore.WsMetricsAutoConfiguration
-com.example.wspoc.wscore.MaskedAccessLogConfig

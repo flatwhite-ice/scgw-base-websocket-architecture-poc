@@ -5,12 +5,12 @@ import com.example.wspoc.auth.token.KeySource
 import com.example.wspoc.auth.token.RefreshingJwksKeySource
 import com.example.wspoc.auth.token.TicketReplayGuard
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.support.drain.DrainCoordinator
+import com.example.wspoc.support.drain.DrainState
 import com.example.wspoc.wscore.auth.HandshakeAuthenticator
 import com.example.wspoc.wscore.auth.HandshakeMeteringWebSocketService
 import com.example.wspoc.wscore.auth.WsHandshakeAuthFilter
 import com.example.wspoc.wscore.endpoint.WsEndpointHandlerMapping
-import com.example.wspoc.wscore.session.DrainCoordinator
-import com.example.wspoc.wscore.session.DrainState
 import com.example.wspoc.wscore.session.ServerIdentity
 import com.example.wspoc.wscore.session.SessionRegistry
 import com.example.wspoc.wscore.session.SessionScope
@@ -64,13 +64,14 @@ class WsCoreAutoConfiguration {
         meters: WsMeters,
     ) = WsSessionRuntime(props, registry, sessionScope, serverIdentity, drainState, meters)
 
+    /** 종료 시 모든 세션을 `ws.drain.window` 안의 무작위 시점에 1001로 닫는다. */
     @Bean
     fun drainCoordinator(
         props: WsProperties,
         drainState: DrainState,
         registry: SessionRegistry,
         sessionScope: SessionScope,
-    ) = DrainCoordinator(props, drainState, registry, sessionScope)
+    ) = DrainCoordinator(props.drain.window, drainState, registry, subject = "WebSocket sessions", sessionScope.dispatcher)
 
     @Bean
     fun handshakeAuthenticator(

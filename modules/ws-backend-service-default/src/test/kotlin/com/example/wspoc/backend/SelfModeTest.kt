@@ -1,11 +1,11 @@
 package com.example.wspoc.backend
 
 import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpHeaders
 import org.springframework.web.reactive.function.client.WebClient
@@ -17,11 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
-)
-@org.springframework.context.annotation.Import(TestAuthConfig::class)
+@SelfModeWsTest
 class SelfModeTest(
     @LocalServerPort private val port: Int,
     @Autowired private val registry: SessionRegistry,

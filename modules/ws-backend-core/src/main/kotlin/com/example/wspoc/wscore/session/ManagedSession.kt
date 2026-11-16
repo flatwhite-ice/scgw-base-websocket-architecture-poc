@@ -1,7 +1,10 @@
 package com.example.wspoc.wscore.session
 
 import com.example.wspoc.auth.token.AuthPrincipal
+import com.example.wspoc.support.session.closeStatusOrNoStatus
 import com.example.wspoc.wscore.auth.WsPrincipal
+import com.example.wspoc.wscore.protocol.WsSessionContext
+import com.example.wspoc.wscore.protocol.WsSessionProtocol
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -25,7 +28,6 @@ import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.web.reactive.socket.CloseStatus
 import org.springframework.web.reactive.socket.WebSocketMessage
 import org.springframework.web.reactive.socket.WebSocketSession
-import reactor.core.publisher.Mono
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -36,7 +38,7 @@ private val log = KotlinLogging.logger {}
  *  - 송신 큐: 세션별 bounded `Channel`. 응답은 기다리고([send]) push는 가득 차면 버린다([trySend])
  *  - heartbeat: 연속 `ws.heartbeat.max-missed`회 pong이 없으면 3008
  *  - 토큰 만료: principal의 `expiresAt`에 3000(익명 세션 제외)
- *  - drain: [SessionRegistry]에 등록해 [DrainCoordinator]가 1001로 닫을 수 있게 한다
+ *  - drain: [SessionRegistry]에 등록해 `DrainCoordinator`(ws-server-support)가 1001로 닫을 수 있게 한다
  *  - 프로토콜 예외: 콜백이나 [scope]의 코루틴이 예외를 던지면 이 세션만 1011로 닫는다
  *  - 메트릭(D27)과 세션 로그(D21)
  *
@@ -224,12 +226,7 @@ internal class ManagedSession(
         meters.sessionEnded(duration.toNanos())
         val byServer = serverCloseStatus
         if (byServer != null) return recordClose(byServer, "server", duration, active)
-        session
-            .closeStatus()
-            .timeout(CLOSE_STATUS_WAIT)
-            .onErrorResume { Mono.empty() }
-            .defaultIfEmpty(CloseStatus.NO_STATUS_CODE)
-            .subscribe { recordClose(it, "client", duration, active) }
+        session.closeStatusOrNoStatus().subscribe { recordClose(it, "client", duration, active) }
     }
 
     private fun recordClose(
@@ -240,10 +237,5 @@ internal class ManagedSession(
     ) {
         meters.closed(status.code)
         SessionLog.closed(session, principal.userId, status, closedBy, duration.toMillis(), active)
-    }
-
-    private companion object {
-        /** 상대가 닫은 경우 close 프레임 상태를 기다리는 최대 시간(메트릭과 로그용). */
-        val CLOSE_STATUS_WAIT: Duration = Duration.ofSeconds(1)
     }
 }

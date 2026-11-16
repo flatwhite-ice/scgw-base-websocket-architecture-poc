@@ -1,14 +1,14 @@
 package com.example.wspoc.backend
 
-import com.example.wspoc.wscore.session.DrainState
+import com.example.wspoc.support.drain.DrainState
 import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Bean
@@ -27,11 +27,8 @@ import kotlin.test.assertEquals
  * 핸드셰이크 필터의 503 검사를 통과한 직후 drain이 시작된 세션. DrainCoordinator의 snapshot에는 없으므로
  * 세션이 스스로 1001로 닫아야 한다. 그러지 않으면 서버가 내려갈 때 close 프레임 없이(1006) 끊긴다.
  */
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
-)
-@Import(TestAuthConfig::class, LateSessionDrainTest.DrainAfterAuthConfig::class)
+@SelfModeWsTest
+@Import(LateSessionDrainTest.DrainAfterAuthConfig::class)
 @DirtiesContext
 class LateSessionDrainTest(
     @LocalServerPort private val port: Int,

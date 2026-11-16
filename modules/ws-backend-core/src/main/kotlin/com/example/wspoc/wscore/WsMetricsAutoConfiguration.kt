@@ -2,17 +2,15 @@ package com.example.wspoc.wscore
 
 import com.example.wspoc.metrics.EventLoopLagProbe
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.support.metrics.ServerMetrics
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.boot.reactor.netty.NettyServerCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.http.client.ReactorResourceFactory
 import reactor.core.scheduler.Schedulers
-import reactor.netty.http.HttpResources
-import reactor.netty.resources.LoopResources
 import java.util.concurrent.TimeUnit
 
 /**
@@ -35,19 +33,18 @@ class WsMetricsAutoConfiguration {
         registry: ObjectProvider<MeterRegistry>,
         resources: ObjectProvider<ReactorResourceFactory>,
     ): EventLoopLagProbe {
-        val probe = EventLoopLagProbe(registry.orTemporary(), props.metrics.eventLoopLagInterval)
-        if (props.metrics.eventLoopLagInterval.isZero) return probe
-        // Boot의 Netty 서버가 쓰는 event loop다(기본은 전역 HttpResources).
-        val serverLoops = (resources.ifAvailable?.loopResources ?: HttpResources.get()).onServer(LoopResources.DEFAULT_NATIVE)
-        probe.watch("netty", serverLoops)
-        probe.watch("parallel") { task, delay -> Schedulers.parallel().schedule(task, delay, TimeUnit.MILLISECONDS) }
+        val interval = props.metrics.eventLoopLagInterval
+        val probe = ServerMetrics.eventLoopLagProbe(registry.orTemporary(), interval, resources.ifAvailable)
+        if (!interval.isZero) {
+            probe.watch("parallel") { task, delay -> Schedulers.parallel().schedule(task, delay, TimeUnit.MILLISECONDS) }
+        }
         return probe
     }
 
     /** Reactor Netty 내장 메트릭. `uri` 태그는 경로 원문 대신 첫 구간만 쓴다([WsMeters.uriTag]). */
     @Bean
     @ConditionalOnProperty("ws.metrics.netty", havingValue = "true", matchIfMissing = true)
-    fun nettyMetricsCustomizer() = NettyServerCustomizer { server -> server.metrics(true, WsMeters::uriTag) }
+    fun nettyMetricsCustomizer() = ServerMetrics.nettyServerMetrics()
 
     private fun ObjectProvider<MeterRegistry>.orTemporary(): MeterRegistry = ifAvailable ?: SimpleMeterRegistry()
 }

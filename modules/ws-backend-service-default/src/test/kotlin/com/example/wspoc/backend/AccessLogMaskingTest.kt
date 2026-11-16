@@ -1,25 +1,22 @@
 package com.example.wspoc.backend
 
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.extension.ExtendWith
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
+import org.springframework.test.context.TestPropertySource
 import java.net.URI
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "ws.access-log.enabled=true"],
-)
-@Import(TestAuthConfig::class)
+@SelfModeWsTest
+@TestPropertySource(properties = ["ws.access-log.enabled=true"])
 @ExtendWith(OutputCaptureExtension::class)
 class AccessLogMaskingTest(
     @LocalServerPort private val port: Int,

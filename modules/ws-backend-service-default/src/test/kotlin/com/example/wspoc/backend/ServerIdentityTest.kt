@@ -1,20 +1,17 @@
 package com.example.wspoc.backend
 
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
+import org.springframework.test.context.TestPropertySource
 import java.net.URI
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri=", "ws.instance-id=backend-a"],
-)
-@Import(TestAuthConfig::class)
+@SelfModeWsTest
+@TestPropertySource(properties = ["ws.instance-id=backend-a"])
 class ServerIdentityTest(
     @LocalServerPort private val port: Int,
 ) {

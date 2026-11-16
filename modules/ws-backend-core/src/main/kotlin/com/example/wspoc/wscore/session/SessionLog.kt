@@ -1,9 +1,9 @@
 package com.example.wspoc.wscore.session
 
+import com.example.wspoc.support.session.SessionLogFormat
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.web.reactive.socket.CloseStatus
 import org.springframework.web.reactive.socket.WebSocketSession
-import java.net.InetSocketAddress
 
 /**
  * 세션 열림/종료 로그(D21). 전용 로거 `ws.session`에 INFO로 남기며 기본은 켜져 있다.
@@ -13,9 +13,7 @@ import java.net.InetSocketAddress
  * 메시지는 람다로 넘겨 로거가 꺼져 있으면 문자열을 만들지 않는다.
  */
 object SessionLog {
-    const val LOGGER_NAME = "ws.session"
-
-    private val log = KotlinLogging.logger(LOGGER_NAME)
+    private val log = KotlinLogging.logger(SessionLogFormat.LOGGER_NAME)
 
     fun opened(
         session: WebSocketSession,
@@ -24,7 +22,7 @@ object SessionLog {
         active: Int,
     ) = log.info {
         "ws session opened id=${session.id} path=${session.handshakeInfo.uri.path} user=$userId anonymous=$anonymous " +
-            "remote=${session.handshakeInfo.remoteAddress.format()} active=$active"
+            "remote=${SessionLogFormat.hostPort(session.handshakeInfo.remoteAddress)} active=$active"
     }
 
     fun closed(
@@ -36,8 +34,6 @@ object SessionLog {
         active: Int,
     ) = log.info {
         "ws session closed id=${session.id} path=${session.handshakeInfo.uri.path} user=$userId code=${status.code} " +
-            "reason=${status.reason.orEmpty().ifEmpty { "-" }} closedBy=$closedBy durationMs=$durationMs active=$active"
+            "reason=${SessionLogFormat.reason(status)} closedBy=$closedBy durationMs=$durationMs active=$active"
     }
-
-    private fun InetSocketAddress?.format() = this?.let { "${it.hostString}:${it.port}" } ?: "-"
 }

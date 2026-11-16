@@ -1,8 +1,6 @@
 package com.example.wspoc.console
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -10,21 +8,12 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
-import java.net.URI
 
 data class TicketRequest(
     val token: String,
 )
 
-/**
- * probe 요청. [credential]:
- *  - `none`: 자격증명 없음
- *  - `ticket`: `?ticket=` (브라우저와 같은 방식)
- *  - `bearer`: `Authorization: Bearer` (브라우저는 못 붙이는 헤더)
- *  - `spoof`: 자격증명 없이 위조한 `X-User-Id`/`X-Scopes`만
- *  - `replay`: 티켓 하나로 두 번 연결(두 번째는 재사용이므로 401이어야 한다)
- */
+/** probe 요청. [credential]에 올 수 있는 값은 [ProbeCredential]에 있다. */
 data class ProbeRequest(
     val path: String,
     val credential: String = "none",
@@ -42,7 +31,7 @@ data class ProbeResponse(
 class ConsoleController(
     private val props: ConsoleProperties,
     private val auth: AuthApiClient,
-    private val prober: HandshakeProber,
+    private val probes: ProbeService,
     private val scraper: MetricsScraper,
 ) {
     @GetMapping("/config")
@@ -73,44 +62,12 @@ class ConsoleController(
         @RequestBody request: TicketRequest,
     ): ResponseEntity<String> = auth.relayTicket(request.token)
 
+    /** 서버에서 핸드셰이크를 대신 시도해 실제 HTTP 상태를 돌려준다. 규칙은 [ProbeService]에 있다. */
     @PostMapping("/probe")
     suspend fun probe(
         @RequestBody request: ProbeRequest,
     ): ProbeResponse {
-        // 경로만 받고 호스트와 query는 서버가 정한다: 임의 주소로 접속하는 데 쓰이지 않게 한다.
-        if (!SAFE_PATH.matches(request.path) || request.path.contains("..")) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "path must look like /ws/...")
-        }
-        val base = props.wsBase.toString().trimEnd('/') + request.path
-        val results =
-            when (request.credential) {
-                "none" -> {
-                    listOf(prober.probe("no credentials", URI.create(base)))
-                }
-
-                "ticket" -> {
-                    listOf(prober.probe("ticket", URI.create("$base?ticket=${auth.issueTicket(request.userId)}")))
-                }
-
-                "bearer" -> {
-                    val headers = HttpHeaders().apply { setBearerAuth(auth.issueToken(request.userId)) }
-                    listOf(prober.probe("bearer", URI.create(base), headers))
-                }
-
-                "spoof" -> {
-                    val headers = HttpHeaders().apply { SPOOFED_HEADERS.forEach { (k, v) -> add(k, v) } }
-                    listOf(prober.probe("spoofed identity headers", URI.create(base), headers))
-                }
-
-                "replay" -> {
-                    val uri = URI.create("$base?ticket=${auth.issueTicket(request.userId)}")
-                    listOf(prober.probe("first use", uri), prober.probe("replay", uri))
-                }
-
-                else -> {
-                    throw ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown credential: ${request.credential}")
-                }
-            }
+        val results = probes.probe(request.path, request.credential, request.userId)
         // 경로와 결과만 남긴다(티켓/토큰은 남기지 않는다).
         log.info { "probe path=${request.path} credential=${request.credential} statuses=${results.map { it.status }}" }
         return ProbeResponse(request.path, request.credential, results)
@@ -118,7 +75,5 @@ class ConsoleController(
 
     private companion object {
         val log = KotlinLogging.logger {}
-        val SAFE_PATH = Regex("^/ws(/[A-Za-z0-9._~-]+)+$")
-        val SPOOFED_HEADERS = mapOf("X-User-Id" to "spoofed-admin", "X-Scopes" to "admin", "X-Auth-Exp" to "9999999999")
     }
 }

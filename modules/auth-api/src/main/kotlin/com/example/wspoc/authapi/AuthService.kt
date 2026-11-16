@@ -5,22 +5,8 @@ import com.example.wspoc.auth.token.IssuedToken
 import com.example.wspoc.auth.token.JwtIssuer
 import com.example.wspoc.auth.token.JwtVerifier
 import com.example.wspoc.auth.token.TokenType
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.bind.annotation.ResponseStatus
 import java.time.Duration
-
-/** 요청 값이 발급 규칙에 맞지 않는다. 응답은 400이다. */
-@ResponseStatus(HttpStatus.BAD_REQUEST)
-class InvalidTokenRequestException(
-    message: String,
-) : RuntimeException(message)
-
-/** 티켓 발급에 제시된 access token이 유효하지 않다. 응답은 401이다. */
-@ResponseStatus(HttpStatus.UNAUTHORIZED)
-class UnauthenticatedException(
-    message: String? = null,
-) : RuntimeException(message)
 
 /** 토큰 발급 규칙. HTTP 관련 처리(본문, 헤더 파싱)는 컨트롤러가 맡는다. */
 @Service
