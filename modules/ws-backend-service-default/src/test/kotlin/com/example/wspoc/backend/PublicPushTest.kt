@@ -2,13 +2,13 @@ package com.example.wspoc.backend
 
 import com.example.wspoc.auth.token.GatewayHeaders
 import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Nested
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import java.net.URI
 import kotlin.test.Test
@@ -68,11 +68,7 @@ class PublicPushTest {
     }
 
     @Nested
-    @SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
-    )
-    @Import(TestAuthConfig::class)
+    @SelfModeWsTest
     inner class SelfMode(
         @LocalServerPort val port: Int,
     ) {

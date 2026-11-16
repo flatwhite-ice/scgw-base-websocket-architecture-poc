@@ -1,19 +1,20 @@
-package com.example.wspoc.gateway
+package com.example.wspoc.support.accesslog
 
 import com.example.wspoc.auth.token.TicketMasking
+import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.reactor.netty.NettyServerCustomizer
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
 import reactor.netty.http.server.logging.AccessLog
 
 /**
  * 선택형 Reactor Netty access log(`ws.access-log.enabled=true`). URI의 WS 티켓을 가린다.
  * 기본은 꺼져 있다: 연결 단위 INFO 로그는 부하 실험 결과를 왜곡한다.
+ * 서비스와 게이트웨이가 같은 설정 키와 형식을 쓰도록 이 모듈에서 등록한다.
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 @ConditionalOnProperty("ws.access-log.enabled", havingValue = "true")
-class MaskedAccessLogConfig {
+class MaskedAccessLogAutoConfiguration {
     @Bean
     fun maskedAccessLog() =
         NettyServerCustomizer { server ->

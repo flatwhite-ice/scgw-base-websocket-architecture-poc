@@ -1,5 +1,6 @@
 package com.example.wspoc.chat
 
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import com.example.wspoc.wscore.testing.WsTestConnection
@@ -7,9 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
 import java.net.URI
 import java.time.Duration
 import kotlin.test.Test
@@ -18,11 +17,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
-)
-@Import(TestAuthConfig::class)
+@SelfModeWsTest
 class ChatTest(
     @LocalServerPort private val port: Int,
     @Autowired private val rooms: ChatRooms,

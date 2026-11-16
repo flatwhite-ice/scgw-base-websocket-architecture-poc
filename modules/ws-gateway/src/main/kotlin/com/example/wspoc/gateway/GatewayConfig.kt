@@ -4,6 +4,9 @@ import com.example.wspoc.auth.token.JwtVerifier
 import com.example.wspoc.auth.token.KeySource
 import com.example.wspoc.auth.token.RefreshingJwksKeySource
 import com.example.wspoc.auth.token.TicketReplayGuard
+import com.example.wspoc.gateway.relay.RelaySessionRegistry
+import com.example.wspoc.support.drain.DrainCoordinator
+import com.example.wspoc.support.drain.DrainState
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -19,6 +22,21 @@ class GatewayConfig {
     @ConditionalOnExpression("!'\${ws.gateway.auth.jwks-uri:}'.isBlank()")
     fun jwksKeySource(props: GatewayProperties): KeySource =
         RefreshingJwksKeySource(requireNotNull(props.auth.jwksUri), props.auth.jwksRefreshInterval)
+
+    /** 종료 시 켜진다. 그 뒤로 [GatewayEdgeFilter]는 새 업그레이드를 503으로 거절한다(모든 라우트). */
+    @Bean
+    fun drainState() = DrainState()
+
+    /**
+     * relay 계층의 graceful drain. 서비스(ws-backend-core)와 같은 방식이다: relay 중인 모든 클라이언트 세션을
+     * `ws.gateway.drain.window` 안의 무작위 시점에 1001로 닫는다. 웹서버 graceful shutdown보다 먼저 동작한다.
+     */
+    @Bean
+    fun drainCoordinator(
+        props: GatewayProperties,
+        drainState: DrainState,
+        registry: RelaySessionRegistry,
+    ) = DrainCoordinator(props.drain.window, drainState, registry, subject = "relayed WebSocket sessions")
 
     /** relay 모드에서 WS 티켓을 소비하는 쪽은 게이트웨이이므로 1회용 검증도 게이트웨이가 맡는다(decisions D4). */
     @Bean

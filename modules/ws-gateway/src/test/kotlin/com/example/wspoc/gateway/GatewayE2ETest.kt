@@ -1,15 +1,13 @@
 package com.example.wspoc.gateway
 
 import com.example.wspoc.auth.token.GatewayHeaders
-import com.example.wspoc.auth.token.KeySource
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -27,16 +25,10 @@ import kotlin.test.assertTrue
  * 게이트웨이는 경로로 서비스를 고른다(`/ws/echo`, `/ws/push` -> ws-backend, `/ws/chat` 이하 -> ws-chat).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(GatewayE2ETest.TestAuthConfig::class)
+@Import(TestKeySourceConfig::class)
 class GatewayE2ETest(
     @LocalServerPort private val port: Int,
 ) {
-    @TestConfiguration(proxyBeanMethods = false)
-    class TestAuthConfig {
-        @Bean
-        fun testKeySource(): KeySource = TestKeys.keySource
-    }
-
     companion object {
         @JvmStatic
         @DynamicPropertySource

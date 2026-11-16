@@ -5,7 +5,10 @@ import com.example.wspoc.auth.token.AuthResult
 import com.example.wspoc.auth.token.GatewayHeaders
 import com.example.wspoc.auth.token.JwtVerifier
 import com.example.wspoc.metrics.HandshakeResult
-import com.example.wspoc.metrics.HandshakeTrace
+import com.example.wspoc.support.handshake.TICKET_PARAM
+import com.example.wspoc.support.handshake.completeWith
+import com.example.wspoc.support.handshake.handshakeTrace
+import com.example.wspoc.support.handshake.verifyHandshake
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.reactor.mono
@@ -50,19 +53,11 @@ class WsAuthGatewayFilterFactory(
         chain: GatewayFilterChain,
     ) {
         val request = exchange.request
-        val result =
-            verifier.verifyHandshake(
-                request.queryParams.getFirst(TICKET_PARAM),
-                request.headers.getFirst(HttpHeaders.AUTHORIZATION),
-            )
-        when (result) {
+        when (val result = verifier.verifyHandshake(request)) {
             is AuthResult.Failure -> {
                 // 업그레이드 요청이면 Edge 필터가 시작한 측정에 거절 사유를 남긴다(D27).
-                exchange
-                    .getAttribute<HandshakeTrace>(HandshakeTrace.ATTRIBUTE)
-                    ?.record(HandshakeResult.UNAUTHORIZED, result.reason.name.lowercase())
-                exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                exchange.response.setComplete().awaitSingleOrNull()
+                exchange.handshakeTrace?.record(HandshakeResult.UNAUTHORIZED, result.reason.name.lowercase())
+                exchange.completeWith(HttpStatus.UNAUTHORIZED).awaitSingleOrNull()
             }
 
             is AuthResult.Success -> {
@@ -96,6 +91,5 @@ class WsAuthGatewayFilterFactory(
     companion object {
         /** [GatewayEdgeFilter.ORDER] 바로 뒤: 클라이언트 신원 헤더를 지운 다음에 진짜 신원을 넣는다. */
         const val ORDER = GatewayEdgeFilter.ORDER + 1
-        private const val TICKET_PARAM = "ticket"
     }
 }

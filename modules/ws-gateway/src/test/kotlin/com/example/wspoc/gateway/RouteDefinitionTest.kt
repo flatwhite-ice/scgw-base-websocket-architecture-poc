@@ -1,5 +1,6 @@
 package com.example.wspoc.gateway
 
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -19,7 +20,7 @@ import kotlin.test.assertEquals
 class RouteDefinitionTest {
     @Nested
     @SpringBootTest(properties = ["ws.gateway.auth.jwks-uri="])
-    @Import(WsGatewayApplicationTests.Keys::class)
+    @Import(TestKeySourceConfig::class)
     inner class Discovery(
         @Autowired val routes: RouteLocator,
     ) {
@@ -45,7 +46,7 @@ class RouteDefinitionTest {
     @SpringBootTest(
         properties = ["ws.gateway.auth.jwks-uri=", "WS_BACKEND_URI=ws://backend-vip:8090", "WS_CHAT_URI=ws://chat-vip:8091"],
     )
-    @Import(WsGatewayApplicationTests.Keys::class)
+    @Import(TestKeySourceConfig::class)
     @ActiveProfiles("static")
     inner class Static(
         @Autowired val routes: RouteLocator,

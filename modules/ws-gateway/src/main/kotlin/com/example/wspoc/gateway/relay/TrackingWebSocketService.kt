@@ -1,8 +1,10 @@
 package com.example.wspoc.gateway.relay
 
 import com.example.wspoc.metrics.HandshakeResult
-import com.example.wspoc.metrics.HandshakeTrace
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.support.drain.DrainState
+import com.example.wspoc.support.handshake.handshakeTrace
+import com.example.wspoc.support.session.closeStatusOrNoStatus
 import org.reactivestreams.Publisher
 import org.springframework.web.reactive.socket.CloseStatus
 import org.springframework.web.reactive.socket.WebSocketHandler
@@ -21,24 +23,24 @@ import java.time.Duration
 class TrackingWebSocketService(
     private val delegate: WebSocketService,
     private val registry: RelaySessionRegistry,
-    private val drainState: GatewayDrainState,
+    private val drainState: DrainState,
     private val meters: WsMeters,
 ) : WebSocketService {
     override fun handleRequest(
         exchange: ServerWebExchange,
         handler: WebSocketHandler,
     ): Mono<Void> {
-        val context = RelayLogContext.of(exchange)
+        val context = RelayContext.of(exchange)
         val tracked = RelayHandler(handler, context, meters.scope(context.routeId))
         return delegate
             .handleRequest(exchange, tracked)
-            .doOnSuccess { exchange.getAttribute<HandshakeTrace>(HandshakeTrace.ATTRIBUTE)?.record(HandshakeResult.OK) }
+            .doOnSuccess { exchange.handshakeTrace?.record(HandshakeResult.OK) }
     }
 
     /** relay 세션 하나: 등록하고, relay를 SCG에 맡기고, 끝나면 해제하며 메트릭과 로그를 남긴다. */
     private inner class RelayHandler(
         private val relay: WebSocketHandler,
-        private val context: RelayLogContext,
+        private val context: RelayContext,
         private val meters: WsMeters.Scope,
     ) : WebSocketHandler {
         // SCG는 이것으로 subprotocol을 협상하므로 그대로 넘겨야 한다.
@@ -74,15 +76,10 @@ class TrackingWebSocketService(
             meters.sessionEnded(duration.toNanos())
             val active = registry.activeCount
             // close 상태는 조금 늦게 올 수 있어 기다리지 않고 구독한다. close 프레임 없이 끊기면 1005(No Status)로 남긴다.
-            session
-                .closeStatus()
-                .timeout(CLOSE_STATUS_WAIT)
-                .onErrorResume { Mono.empty() }
-                .defaultIfEmpty(CloseStatus.NO_STATUS_CODE)
-                .subscribe { status ->
-                    meters.closed(status.code)
-                    RelaySessionLog.closed(session, context, status, duration, active)
-                }
+            session.closeStatusOrNoStatus().subscribe { status ->
+                meters.closed(status.code)
+                RelaySessionLog.closed(session, context, status, duration, active)
+            }
         }
     }
 
@@ -100,10 +97,5 @@ class TrackingWebSocketService(
             delegate.send(Flux.from(messages).doOnNext { if (it.isData()) meters.messagesOut.increment() })
 
         private fun WebSocketMessage.isData() = type == WebSocketMessage.Type.TEXT || type == WebSocketMessage.Type.BINARY
-    }
-
-    private companion object {
-        /** 상대가 닫은 경우 close 프레임 상태를 기다리는 최대 시간(메트릭과 로그용). */
-        val CLOSE_STATUS_WAIT: Duration = Duration.ofSeconds(1)
     }
 }

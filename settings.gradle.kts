@@ -13,6 +13,7 @@ rootProject.name = "websocket-poc"
 include(
     "modules:auth-token",
     "modules:ws-metrics",
+    "modules:ws-server-support",
     "modules:auth-api",
     "modules:ws-backend-core",
     "modules:ws-backend-service-default",

@@ -1,7 +1,7 @@
 package com.example.wspoc.chat
 
 import com.example.wspoc.auth.token.AuthPrincipal
-import com.example.wspoc.wscore.session.WsSessionContext
+import com.example.wspoc.wscore.protocol.WsSessionContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.time.Instant

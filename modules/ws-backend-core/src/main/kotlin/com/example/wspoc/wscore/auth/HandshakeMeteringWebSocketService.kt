@@ -1,7 +1,7 @@
 package com.example.wspoc.wscore.auth
 
 import com.example.wspoc.metrics.HandshakeResult
-import com.example.wspoc.metrics.HandshakeTrace
+import com.example.wspoc.support.handshake.handshakeTrace
 import org.springframework.web.reactive.socket.WebSocketHandler
 import org.springframework.web.reactive.socket.server.WebSocketService
 import org.springframework.web.server.ServerWebExchange
@@ -18,8 +18,5 @@ class HandshakeMeteringWebSocketService(
     override fun handleRequest(
         exchange: ServerWebExchange,
         handler: WebSocketHandler,
-    ): Mono<Void> =
-        delegate.handleRequest(exchange, handler).doOnSuccess {
-            exchange.getAttribute<HandshakeTrace>(HandshakeTrace.ATTRIBUTE)?.record(HandshakeResult.OK)
-        }
+    ): Mono<Void> = delegate.handleRequest(exchange, handler).doOnSuccess { exchange.handshakeTrace?.record(HandshakeResult.OK) }
 }

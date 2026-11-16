@@ -2,6 +2,7 @@ package com.example.wspoc.gateway
 
 import com.example.wspoc.auth.token.GatewayHeaders
 import com.example.wspoc.wscore.session.SessionRegistry
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.runBlocking
 import org.springframework.boot.test.context.SpringBootTest
@@ -22,7 +23,7 @@ import kotlin.test.assertNotEquals
  * 101로 업그레이드하므로(D14), 클라이언트에는 401이 아니라 "업그레이드 후 즉시 종료"로 보인다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(GatewayE2ETest.TestAuthConfig::class)
+@Import(TestKeySourceConfig::class)
 class MissingAuthFilterTest(
     @LocalServerPort private val port: Int,
 ) {

@@ -1,7 +1,8 @@
 package com.example.wspoc.gateway
 
-import com.example.wspoc.gateway.relay.GatewayDrainState
 import com.example.wspoc.gateway.relay.RelaySessionRegistry
+import com.example.wspoc.support.drain.DrainState
+import com.example.wspoc.wscore.testing.TestKeySourceConfig
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
@@ -28,11 +29,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * GatewayEdgeFilter의 503 검사를 통과한 직후 drain이 시작된 업그레이드. GatewayDrainCoordinator의 snapshot에는
+ * GatewayEdgeFilter의 503 검사를 통과한 직후 drain이 시작된 업그레이드. DrainCoordinator의 snapshot에는
  * 없으므로, 게이트웨이가 upstream을 열지 않고 바로 1001로 닫아야 한다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(GatewayE2ETest.TestAuthConfig::class, GatewayLateSessionDrainTest.DrainAfterEdgeConfig::class)
+@Import(TestKeySourceConfig::class, GatewayLateSessionDrainTest.DrainAfterEdgeConfig::class)
 @DirtiesContext
 class GatewayLateSessionDrainTest(
     @LocalServerPort private val port: Int,
@@ -42,7 +43,7 @@ class GatewayLateSessionDrainTest(
     class DrainAfterEdgeConfig {
         /** Edge 필터(503 검사)와 WsAuth가 통과시킨 뒤, 업그레이드 전에 drain을 켠다: 경합 구간을 그대로 재현한다. */
         @Bean
-        fun drainAfterEdge(drainState: GatewayDrainState): GlobalFilter =
+        fun drainAfterEdge(drainState: DrainState): GlobalFilter =
             // SCG는 GlobalFilter의 순서를 Ordered로만 읽는다. @Bean 메서드의 @Order는 보지 않아서, 순서 없는 필터는
             // WebsocketRoutingFilter 뒤로 밀려 실행되지 않는다.
             object : GlobalFilter, Ordered {

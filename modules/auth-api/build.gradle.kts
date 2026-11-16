@@ -4,4 +4,5 @@ plugins {
 
 dependencies {
     implementation(project(":modules:auth-token"))
+    implementation(libs.kotlin.logging)
 }

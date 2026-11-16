@@ -1,7 +1,7 @@
 package com.example.wspoc.chat
 
-import com.example.wspoc.wscore.session.JsonWsProtocol
-import com.example.wspoc.wscore.session.WsSessionContext
+import com.example.wspoc.wscore.protocol.JsonWsProtocol
+import com.example.wspoc.wscore.protocol.WsSessionContext
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.ObjectNode
 import java.time.Clock

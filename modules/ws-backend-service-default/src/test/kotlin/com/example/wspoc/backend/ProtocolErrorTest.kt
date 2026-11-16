@@ -1,11 +1,12 @@
 package com.example.wspoc.backend
 
 import com.example.wspoc.wscore.endpoint.WsEndpoint
+import com.example.wspoc.wscore.protocol.WsSessionContext
+import com.example.wspoc.wscore.protocol.WsSessionProtocol
 import com.example.wspoc.wscore.session.ManagedWsHandler
 import com.example.wspoc.wscore.session.SessionRegistry
-import com.example.wspoc.wscore.session.WsSessionContext
-import com.example.wspoc.wscore.session.WsSessionProtocol
 import com.example.wspoc.wscore.session.WsSessionRuntime
+import com.example.wspoc.wscore.testing.SelfModeWsTest
 import com.example.wspoc.wscore.testing.TestKeys
 import com.example.wspoc.wscore.testing.WsTestClient
 import kotlinx.coroutines.delay
@@ -13,7 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Bean
@@ -28,11 +28,8 @@ import kotlin.test.assertEquals
  *  - 프로토콜 예외는 코드 없는 종료(1005)가 아니라 1011로 닫힌다. 다른 세션에는 영향이 없다.
  *  - 문자열이 아닌 `type`, 지나치게 큰 `intervalMs`는 세션을 죽이지 않는다.
  */
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["ws.auth.mode=self", "ws.auth.jwks-uri="],
-)
-@Import(TestAuthConfig::class, ProtocolErrorTest.BoomConfig::class)
+@SelfModeWsTest
+@Import(ProtocolErrorTest.BoomConfig::class)
 class ProtocolErrorTest(
     @LocalServerPort private val port: Int,
     @Autowired private val registry: SessionRegistry,

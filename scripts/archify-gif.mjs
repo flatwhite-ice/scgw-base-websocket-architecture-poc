@@ -106,6 +106,11 @@ try {
   if (gif.error || gif.status !== 0) throw new Error(`gifski 실패: ${gif.error?.message ?? `exit ${gif.status}`}`);
   console.log(`${out}: ${frames} frames, ${fps}fps, width ${width}, theme ${box.theme}`);
 } finally {
-  chrome.kill();
-  rmSync(work, { recursive: true, force: true });
+  // Chrome이 끝난 뒤에 임시 폴더를 지운다. 끝나기 전에 지우면 Chrome이 프로필에 쓰는 중이라 실패할 수 있다.
+  if (chrome.exitCode === null) {
+    const exited = new Promise((r) => chrome.once('exit', r));
+    chrome.kill();
+    await exited;
+  }
+  rmSync(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }

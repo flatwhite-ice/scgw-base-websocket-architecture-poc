@@ -1,6 +1,7 @@
 package com.example.wspoc.gateway.relay
 
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.support.drain.DrainState
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.config.BeanPostProcessor
 import org.springframework.context.annotation.Bean
@@ -25,7 +26,7 @@ class RelaySessionTracking {
         @Bean
         fun relaySessionTrackingPostProcessor(
             registry: ObjectProvider<RelaySessionRegistry>,
-            drainState: ObjectProvider<GatewayDrainState>,
+            drainState: ObjectProvider<DrainState>,
             meters: ObjectProvider<WsMeters>,
         ): BeanPostProcessor =
             object : BeanPostProcessor {

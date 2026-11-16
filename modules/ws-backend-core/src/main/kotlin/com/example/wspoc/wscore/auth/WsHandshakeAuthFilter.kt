@@ -4,8 +4,9 @@ import com.example.wspoc.auth.token.AuthResult
 import com.example.wspoc.metrics.HandshakeResult
 import com.example.wspoc.metrics.HandshakeTrace
 import com.example.wspoc.metrics.WsMeters
+import com.example.wspoc.support.drain.DrainState
+import com.example.wspoc.support.handshake.completeWith
 import com.example.wspoc.wscore.endpoint.WsEndpointHandlerMapping
-import com.example.wspoc.wscore.session.DrainState
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
@@ -75,13 +76,12 @@ class WsHandshakeAuthFilter(
         }
     }
 
+    /** chain을 호출하지 않고 여기서 응답을 끝내기 때문에 업그레이드가 일어나지 않는다. */
     private suspend fun reject(
         exchange: ServerWebExchange,
         status: HttpStatus,
     ) {
-        exchange.response.statusCode = status
-        // chain을 호출하지 않고 여기서 응답을 끝내기 때문에 업그레이드가 일어나지 않는다.
-        exchange.response.setComplete().awaitSingleOrNull()
+        exchange.completeWith(status).awaitSingleOrNull()
     }
 
     companion object {

@@ -66,12 +66,13 @@ node scripts/archify-gif.mjs docs/archify/websocket-poc-architecture.html docs/a
 |---|---|
 | SCG에서 WebSocket 업그레이드 전에 인증하기 | `ws-gateway` `WsAuthGatewayFilterFactory`, `GatewayEdgeFilter` (D20) |
 | SCG 라우트를 YAML로 선언하고 서비스별로 나누기 | `ws-gateway` `application.yml` (D15, D18, D24) |
-| SCG가 relay 중인 세션을 drain하기(SCG를 고치지 않고) | `ws-gateway` `relay/RelaySessionTracking`, `TrackingWebSocketService`, `GatewayDrainCoordinator` (D10, D24) |
+| SCG가 relay 중인 세션을 drain하기(SCG를 고치지 않고) | `ws-gateway` `relay/RelaySessionTracking`, `TrackingWebSocketService`, `ws-server-support` `drain/DrainCoordinator` (D10, D24, D32) |
 | SCG의 close 코드 변환과 "101 뒤 1002" 이해하기 | [`docs/decisions.md`](docs/decisions.md) D13, D14 |
+| 종료 시 세션을 나눠서 닫기(graceful drain, 서비스와 게이트웨이 공용) | `ws-server-support` `drain/DrainCoordinator`, `DrainTarget` (D32) |
 | WebFlux에서 경로 기반 WebSocket 엔드포인트 선언하기 | `ws-backend-core` `endpoint/WsEndpoint`, `WsEndpointHandlerMapping` (D16) |
 | 핸드셰이크에서 JWT·티켓 검증하기(direct) | `ws-backend-core` `auth/WsHandshakeAuthFilter`, `HandshakeAuthenticator` |
 | 세션 하나를 코루틴으로 관리하기(송신 큐, heartbeat, 만료, close) | `ws-backend-core` `session/ManagedWsHandler`, `ManagedSession` (D8, D9) |
-| 새 WebSocket 서비스 만들기 | `ws-backend-service-chat` `ChatConfig`, `ChatProtocol` (D17, D18) |
+| 새 WebSocket 서비스 만들기 | `ws-backend-service-chat` `ChatConfig`, `ChatProtocol`, `ws-backend-core` `protocol/` (D17, D18) |
 | 1회용 티켓 발급·검증, JWKS 캐시와 키 회전 | `auth-token` `JwtIssuer`, `JwtVerifier`(`verifyHandshake`), `JwksKeySource`, `TicketReplayGuard` (D4, D5, D7, D22) |
 | WebSocket 메트릭 설계(태그 개수 제한, event loop 지연) | `ws-metrics` `WsMeters`, `EventLoopLagProbe` (D27) |
 | event loop 블로킹을 테스트로 잡기 | `build-logic`, `auth-token` testFixtures `WsPocBlockHoundIntegration` (D3, D6) |
@@ -94,7 +95,8 @@ MVP 단계라 실서비스로 옮길 때 채워야 할 것이 남아 있다. 자
 | `modules/auth-token` | 라이브러리 | JWT 발급·검증(RS256, JWKS), 1회용 티켓 재사용 방지, 게이트웨이 신원 헤더, 티켓 마스킹. Spring 비의존 |
 | `modules/auth-api` | 앱 :8070 | `/auth/token`, `/auth/ws-ticket`, `/.well-known/jwks.json` |
 | `modules/ws-metrics` | 라이브러리 | 서비스와 게이트웨이가 함께 쓰는 메트릭 정의 |
-| `modules/ws-backend-core` | 라이브러리 | WebSocket 서비스 공통 런타임: `@WsEndpoint`, 핸드셰이크 인증, 세션 수명, drain, 메트릭 |
+| `modules/ws-server-support` | 라이브러리 | 서비스 런타임과 게이트웨이가 함께 쓰는 부품: drain, 핸드셰이크 자격증명 추출, close 상태, 세션 로그 표기, 마스킹 access log |
+| `modules/ws-backend-core` | 라이브러리 | WebSocket 서비스 공통 런타임: `@WsEndpoint`, 핸드셰이크 인증, 세션 수명, 메트릭. 서비스가 구현하는 API는 `protocol` 패키지에 있다 |
 | `modules/ws-backend-service-default` | 앱 :8090 / :8092 | 서비스 `ws-backend`: `/ws/echo`, `/ws/push`, 익명 `/ws/public/push` |
 | `modules/ws-backend-service-chat` | 앱 :8091 / :8093 | 서비스 `ws-chat`: `/ws/chat`(방 단위 채팅) |
 | `modules/ws-gateway` | 앱 :8080 | Spring Cloud Gateway. 경로 라우팅과 라우트 단위 인증(`WsAuth`) |
@@ -167,7 +169,7 @@ relay와 direct의 비용 차이를 1 vCPU / 4 GB 파드에서 잰다. 자세한
 
 | 문서 | 내용 |
 |---|---|
-| [`docs/decisions.md`](docs/decisions.md) | 설계 결정과 그 이유, 스펙에서 벗어난 점(D1–D31) |
+| [`docs/decisions.md`](docs/decisions.md) | 설계 결정과 그 이유, 스펙에서 벗어난 점(D1–D32) |
 | [`docs/progress.md`](docs/progress.md) | 마일스톤별 진행과 검증 기록, 후속 과제 |
 | [`docs/hypotheses.md`](docs/hypotheses.md) | 검증할 가설(H1–H5)과 실험 계획(E1–E5), 착수 당시 명세 |
 | [`docs/ws-cli-testing.md`](docs/ws-cli-testing.md) | websocat/curl로 수동 확인하는 방법 |

@@ -1,7 +1,7 @@
 package com.example.wspoc.backend
 
-import com.example.wspoc.wscore.session.JsonWsProtocol
-import com.example.wspoc.wscore.session.WsSessionContext
+import com.example.wspoc.wscore.protocol.JsonWsProtocol
+import com.example.wspoc.wscore.protocol.WsSessionContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive

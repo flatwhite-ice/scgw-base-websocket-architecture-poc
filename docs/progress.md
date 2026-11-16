@@ -232,8 +232,14 @@ close 코드는 D13에서 바뀌었다(스펙 4401/4408 → 3000/3008, drain 100
 - `./gradlew clean build` 통과(43 suites, 131 tests, 실패 0). 테스트는 import와 클래스 이름만 바꿨다.
 - 실제 실행: 새 bootJar로 auth 18070, ws-backend 18090·18092, ws-chat 18091·18093, gateway 18080을 띄웠다. `WsSmoke`(게이트웨이 + direct 둘) **ALL OK**. 게이트웨이 메트릭에 `ok`, `unauthorized{reason=missing|replayed}`, 라우트별 close 코드가 이전과 같게 나왔고, 서비스의 `ws_eventloop_lag`도 `netty`·`parallel` 두 풀에서 나왔다. 게이트웨이 SIGTERM 때 drain 로그 확인, 로그에 티켓 원문 0건.
 
+### 공유 모듈과 구조 정리 (2026-11-17)
+- core와 게이트웨이에 두 벌씩 있던 코드를 새 모듈 `ws-server-support`로 모았다(decisions D32): drain 상태와 coordinator, 마스킹 access log, 핸드셰이크 자격증명 추출, close 상태 기록, 세션 로그 표기, 메트릭 구성 조각.
+- core에 `protocol` 패키지를 두어 서비스가 구현하는 API와 세션 런타임을 나눴다. 게이트웨이는 `RelayContext`를, ws-console은 `ProbeService`와 `MetricsSnapshot`을, auth-api는 예외를 별도 파일로 분리했다.
+- 테스트 설정 중복을 core testFixtures의 `TestKeySourceConfig`와 `@SelfModeWsTest`로 모았다.
+- 설정 키, 메트릭 이름, `ws.session` 로그 형식, yml은 그대로다. drain 운영 로그 두 줄만 로거 이름과 문구가 바뀌었다.
+- 검증: `./gradlew build` 통과, 테스트 134개(이전 131개 + `DrainCoordinatorTest` 3개). 실제 프로세스 확인 결과는 D32에 적었다.
+
 ## 후속 과제
-- (검토, D31) core와 게이트웨이의 drain coordinator, access log 설정이 거의 같은 코드로 두 벌 있다. 함께 쓸 모듈을 둘지 정한다.
 - (검토, D31) 프로토콜 콜백이 오래 걸릴 때 heartbeat가 PONG을 놓치지 않는지 확인하는 테스트가 없다.
 - (검토, D29) BlockHound 테스트 설정(`WsPocBlockHoundIntegration`)이 `auth-token`의 testFixtures에 있다. 인증과 관계없으므로 별도 테스트 지원 모듈로 옮길지 정한다.
 - (검토) `docs/metrics-proposals.md`의 추가 메트릭 제언 채택 여부를 정한다(세션 수명 버킷, drain 상태, upstream 인스턴스별 세션, `ws.bytes`, heartbeat RTT 등).
